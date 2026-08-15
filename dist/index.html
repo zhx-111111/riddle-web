@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0a0f">
+<title>Tom Riddle's Diary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;600&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-theme="diary">
+
+<!-- ─── SVG Sprite (inline, no Unicode) ─────────────── -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Fullscreen: arrows pointing outward -->
+    <symbol id="icon-fullscreen" viewBox="0 0 24 24">
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+    <!-- Exit fullscreen: arrows pointing inward -->
+    <symbol id="icon-exit-fullscreen" viewBox="0 0 24 24">
+      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+    <!-- Theme: diary (book) -->
+    <symbol id="icon-theme-diary" viewBox="0 0 24 24">
+      <path d="M4 4h7v16H4zM20 4h-7v16h7z" fill="currentColor" opacity="0.9"/>
+    </symbol>
+    <!-- Theme: parchment (scroll) -->
+    <symbol id="icon-theme-parchment" viewBox="0 0 24 24">
+      <path d="M5 3h10a3 3 0 013 3v12a3 3 0 01-3 3H5z" fill="currentColor" opacity="0.85"/>
+      <path d="M5 3v18" stroke="currentColor" stroke-width="1.5" fill="none"/>
+    </symbol>
+    <!-- Theme: midnight (moon) -->
+    <symbol id="icon-theme-midnight" viewBox="0 0 24 24">
+      <path d="M20 14a8 8 0 01-10-10 8 8 0 1010 10z" fill="currentColor" opacity="0.85"/>
+    </symbol>
+    <!-- Theme: letter (envelope) -->
+    <symbol id="icon-theme-letter" viewBox="0 0 24 24">
+      <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M3 7l9 6 9-6" fill="none" stroke="currentColor" stroke-width="2"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="app-container">
+
+  <!-- ─── Header (normal mode only) ─────────────────── -->
+  <header class="header" id="main-header">
+    <div class="title-area">
+      <span class="status-dot ready" id="status-dot"></span>
+      <h1>Tom Riddle's Diary</h1>
+    </div>
+  </header>
+
+  <!-- ─── Theme Switcher (normal mode only) ─────────── -->
+  <nav class="theme-switcher" id="main-theme-switcher" aria-label="Theme selector">
+    <button class="theme-btn active" data-theme="diary" title="Tom's Diary" style="background:#1a1a2e">
+      <svg><use href="#icon-theme-diary"/></svg>
+    </button>
+    <button class="theme-btn" data-theme="parchment" title="Parchment" style="background:#d4c5a0">
+      <svg><use href="#icon-theme-parchment"/></svg>
+    </button>
+    <button class="theme-btn" data-theme="midnight" title="Midnight" style="background:#0d1b2a">
+      <svg><use href="#icon-theme-midnight"/></svg>
+    </button>
+    <button class="theme-btn" data-theme="letter" title="Letter" style="background:#f5e6d0">
+      <svg><use href="#icon-theme-letter"/></svg>
+    </button>
+  </nav>
+
+  <!-- ─── Writing Surface (always visible) ──────────── -->
+  <main class="writing-surface" id="writing-surface">
+    <!-- Floating toolbar: theme switcher + fullscreen toggle (fullscreen mode) -->
+    <div class="floating-toolbar" id="floating-toolbar">
+      <div class="floating-themes">
+        <button class="floating-theme-btn active" data-theme="diary" title="Tom's Diary" style="background:#1a1a2e">
+          <svg><use href="#icon-theme-diary"/></svg>
+        </button>
+        <button class="floating-theme-btn" data-theme="parchment" title="Parchment" style="background:#d4c5a0">
+          <svg><use href="#icon-theme-parchment"/></svg>
+        </button>
+        <button class="floating-theme-btn" data-theme="midnight" title="Midnight" style="background:#0d1b2a">
+          <svg><use href="#icon-theme-midnight"/></svg>
+        </button>
+        <button class="floating-theme-btn" data-theme="letter" title="Letter" style="background:#f5e6d0">
+          <svg><use href="#icon-theme-letter"/></svg>
+        </button>
+      </div>
+      <button class="floating-tool-btn" id="fullscreen-btn" title="Fullscreen">
+        <svg><use href="#icon-fullscreen"/></svg>
+      </button>
+    </div>
+
+    <canvas id="writing-canvas"></canvas>
+    <svg id="svg-layer" preserveAspectRatio="none" viewBox="0 0 1000 1000"></svg>
+    <div class="hint-text" id="hint-text">
+      <span class="hint-main">Write with your pen&hellip;</span>
+      <span class="hint-sub">Pause 1.5s to send &middot; Riddle Web on GitHub</span>
+    </div>
+  </main>
+
+  <!-- ─── Footer (normal mode only) ─────────────────── -->
+  <footer class="footer" id="main-footer">
+    <span id="status-text">Write to Tom&hellip;</span>
+  </footer>
+</div>
+
+<!-- ─── Error Overlay ─────────────────────────────── -->
+<div class="error-overlay hidden" id="error-overlay">
+  <div class="error-box">
+    <h3 id="error-title">Error</h3>
+    <p id="error-msg"></p>
+    <button id="error-close">Dismiss</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
