@@ -1,0 +1,43 @@
+name = "riddle-web"
+main = "src/worker/index.ts"
+compatibility_date = "2024-09-01"
+
+# Wrangler auto-compiles TypeScript via esbuild.
+# Output goes to .wrangler/ dir; no manual build needed.
+[build]
+command = "npm install"
+
+# KV binding (diary memory storage)
+[[kv_namespaces]]
+binding = "RIDDLE_KV"
+id = "bb4cf971fa0740c9a5056f3541820c21"
+
+# Static assets (frontend pages + Worker same domain)
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+# ═════════════════════════════════════════════════════════
+# ⚠️  NO [vars] BLOCK HERE — INTENTIONAL
+# ═════════════════════════════════════════════════════════
+#
+# All 28 params have hardcoded defaults in src/worker/config.ts.
+# They are tunable at runtime via the /admin panel (PUT /api/admin/config).
+#
+# If you see OLD VARS in Cloudflare dashboard (idle_timeout_ms,
+# min_dist_px, poll_interval_ms, etc.), they are LEFTOVERS from
+# old deploys. DELETE THEM. They override config.ts defaults.
+#
+# Fastest cleanup:  bash clean-vars.sh
+# Manual cleanup:  Dashboard → Settings → Variables → Vars section
+#                 → click red trash icon on EVERY variable
+#
+# Required Secrets (Settings → Variables → Add Secret):
+#   agnes_keys      = Agnes Intl API Key(s), comma-separated
+#   agnes_cn_keys   = Agnes China API Key(s), comma-separated (opt)
+#   zhipu_keys      = Zhipu AI API Key(s), comma-separated
+#   admin_password  = Admin panel password (protects /admin)
+#   admin_token     = Session signing secret (any random string)
+#
+# That is it. 5 secrets, 0 vars. Clean.
+# ═════════════════════════════════════════════════════════
