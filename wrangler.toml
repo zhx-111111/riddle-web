@@ -1,21 +1,22 @@
 name = "riddle-web"
-main = "src/worker/index.ts"
-compatibility_date = "2024-09-01"
+main = ".wrangler/index.js"
+compatibility_date = "2025-01-01"
 
 # Wrangler auto-compiles TypeScript via esbuild.
-# Output goes to .wrangler/ dir; no manual build needed.
+# Pre-built output in .wrangler/index.js (compiled from src/worker/index.ts)
 [build]
-command = "npm install"
+command = "npm install && node build-worker.js"
 
 # KV binding (diary memory storage)
 [[kv_namespaces]]
 binding = "RIDDLE_KV"
 id = "bb4cf971fa0740c9a5056f3541820c21"
 
-# Static assets (frontend pages + Worker same domain)
+# Static assets (frontend pages served from same domain)
 [assets]
 directory = "./dist"
 binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 # ═══════════════════════════════════════════════════════
 # [vars] — These auto-appear in Cloudflare Dashboard

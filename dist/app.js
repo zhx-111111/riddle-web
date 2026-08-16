@@ -565,7 +565,7 @@ function rasterizeText(text, font, size) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const cx = c.getContext('2d', { willReadFrequently: true });
     cx.fillStyle = '#000'; cx.fillRect(0, 0, w, h);
-    cx.fillStyle = '#fff'; cx.font = `${cs}px ${font`; cx.textBaseline = 'alphabetic';
+    cx.fillStyle = '#fff'; cx.font = `${cs}px ${font}`; cx.textBaseline = 'alphabetic';
     cx.fillText(text, Math.ceil(8*DPR), h * 0.7);
     const imgData = cx.getImageData(0, 0, w, h);
     const mask = new Uint8Array(w * h);
@@ -713,7 +713,7 @@ async function init() {
   updateFullscreenIcon();
   setStatus('ready', 'Write with your pen&hellip;');
   await loadConfig();
-  fetch('/api/init', { method: 'POST' }).then(r=>r.json()).then(d=>{ if(d&&d.sessionId) localStorage.setItem('riddle-sid', d.sessionId); }).catch(()=>{});
+  fetch('/api/init', { method: 'GET' }).then(r=>r.json()).then(d=>{ if(d&&d.sessionId) localStorage.setItem('riddle-sid', d.sessionId); }).catch(()=>{});
 }
 
 init();

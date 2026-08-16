@@ -120,7 +120,7 @@ html, body {
   color: var(--accent-color);
 }
 .tool-btn:hover  { background: rgba(128,128,128,0.15); }
-.tool-btn:active { background: /gba(128,128,128,0.25); }
+.tool-btn:active { background: rgba(128,128,128,0.25); }
 .tool-btn svg    { width: 20px; height: 20px; fill: currentColor; }
 
 /* ─── Theme Switcher ─────────────────────────────── */

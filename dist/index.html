@@ -7,9 +7,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0a0a0f">
 <title>Tom Riddle's Diary</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;600&family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+<!-- Fonts: use system fonts as primary (fastest), Google Fonts as enhancement -->
+<style>
+  /* System font fallbacks — no external dependency required */
+  :root {
+    --font-hand: 'Caveat', 'Dancing Script', 'Segoe Script', 'Comic Sans MS', 'Bradley Hand', cursive;
+    --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+</style>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body data-theme="diary">
@@ -118,6 +123,21 @@
   </div>
 </div>
 
+<!-- ─── Async load Google Fonts (non-blocking) ─────── -->
+<script>
+  // Load Google Fonts asynchronously — page works fine without it
+  (function() {
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Dancing+Script:wght@400;600&display=swap';
+    link.media = 'print';
+    link.onload = function() { link.media = 'all'; };
+    // Timeout: if Google Fonts fails to load in 3s, give up silently
+    var timeout = setTimeout(function() { link.onload = null; }, 3000);
+    link.onload = function() { clearTimeout(timeout); link.media = 'all'; };
+    document.head.appendChild(link);
+  })();
+</script>
 <script src="app.js"></script>
 </body>
 </html>
