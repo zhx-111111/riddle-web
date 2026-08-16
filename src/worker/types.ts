@@ -1,62 +1,72 @@
 // ═════════════════════════════════════════════════════════
-// types.ts — Environment variables (all lowercase) + types
+// types.ts — Environment variables (dual naming) + types
 // ═════════════════════════════════════════════════════════
 
-// ─── Cloudflare-injected raw env (all lowercase) ───
+// ─── Cloudflare-injected raw env ───
+// Cloudflare injects vars EXACTLY as named in wrangler.toml [vars]
+// or as set in the dashboard. We declare BOTH naming conventions
+// because the dashboard may show snake_case while JS uses camelCase.
 export interface RawEnv {
   RIDDLE_KV?: any;
-
-  // ─── Secrets (encrypted) ───
-  agnes_keys?: string;      // comma-separated Agnes Intl keys
-  agnes_cn_keys?: string;   // comma-separated Agnes CN keys
-  zhipu_keys?: string;      // comma-separated Zhipu keys
-  admin_password?: string;   // admin panel password
-  admin_token?: string;      // session signing secret
-
-  // ─── Optional overrides (set in Cloudflare Vars if you want to tweak) ───
-  // If not set, hardcoded defaults in config.ts are used.
-  agnes_base_url?: string;
-  agnes_cn_base_url?: string;
-  zhipu_base_url?: string;
-  agnes_model?: string;
-  agnes_cn_model?: string;
-  zhipu_model?: string;
-
-  idle_timeout_ms?: string;
-  min_dist_px?: string;
-  max_dist_px?: string;
-  pressure_min_px?: string;
-  pressure_max_px?: string;
-  poll_interval_ms?: string;
-  stroke_interval_ms?: string;
-  stroke_max_dur_ms?: string;
-  svg_stroke_width?: string;
-  max_lines?: string;
-  line_height_px?: string;
-  margin_top_px?: string;
-  margin_x_px?: string;
-  font_size_px?: string;
-  reply_fade_delay_ms?: string;
-  fade_duration_ms?: string;
-  history_ttl_sec?: string;
-  max_history_turns?: string;
-  max_retries?: string;
-  request_timeout_ms?: string;
-  max_tokens?: string;
-  temperature?: string;
-
   ASSETS?: any;
+
+  // ─── Secrets (encrypted, set via Dashboard → Add Secret) ───
+  // snake_case (what you type in dashboard)
+  agnes_keys?: string;
+  agnes_cn_keys?: string;
+  zhipu_keys?: string;
+  admin_password?: string;
+  admin_token?: string;
+  // camelCase (alternative, also accepted)
+  agnesKeys?: string;
+  agnesCnKeys?: string;
+  zhipuKeys?: string;
+  adminPassword?: string;
+  adminToken?: string;
+
+  // ─── Models & URLs (preset in wrangler.toml [vars]) ───
+  agnes_model?: string;       agnesModel?: string;
+  agnes_cn_model?: string;    agnesCnModel?: string;
+  zhipu_model?: string;       zhipuModel?: string;
+  agnes_base_url?: string;    agnesBaseUrl?: string;
+  agnes_cn_base_url?: string; agnesCnBaseUrl?: string;
+  zhipu_base_url?: string;    zhipuBaseUrl?: string;
+
+  // ─── Tuning params (defaults in config.ts, editable via /admin) ───
+  idle_timeout_ms?: string;    idleTimeoutMs?: string;
+  min_dist_px?: string;        minDistPx?: string;
+  max_dist_px?: string;        maxDistPx?: string;
+  pressure_min_px?: string;    pressureMinPx?: string;
+  pressure_max_px?: string;    pressureMaxPx?: string;
+  poll_interval_ms?: string;   pollIntervalMs?: string;
+  stroke_interval_ms?: string; strokeIntervalMs?: string;
+  stroke_max_dur_ms?: string; strokeMaxDurMs?: string;
+  svg_stroke_width?: string;   svgStrokeWidth?: string;
+  max_lines?: string;          maxLines?: string;
+  line_height_px?: string;     lineHeightPx?: string;
+  margin_top_px?: string;      marginTopPx?: string;
+  margin_x_px?: string;        marginXPx?: string;
+  font_size_px?: string;       fontSizePx?: string;
+  reply_fade_delay_ms?: string;replyFadeDelayMs?: string;
+  fade_duration_ms?: string;   fadeDurationMs?: string;
+  history_ttl_sec?: string;    historyTtlSec?: string;
+  max_history_turns?: string;  maxHistoryTurns?: string;
+  max_retries?: string;        maxRetries?: string;
+  request_timeout_ms?: string; requestTimeoutMs?: string;
+  max_tokens?: string;         maxTokens?: string;
+  temperature?: string;
 }
 
-// ─── Internal Env (what the rest of the code uses) ───
+// ─── Internal Env (what the rest of the code uses — camelCase) ───
 export interface Env {
   RIDDLE_KV: any;
+  ASSETS?: any;
 
   // Admin
   adminPassword?: string;
   adminToken?: string;
 
-  // Provider keys
+  // Provider keys (parsed into arrays)
   agnesKeys: string[];
   agnesCnKeys: string[];
   zhipuKeys: string[];
@@ -98,8 +108,6 @@ export interface Env {
   requestTimeoutMs: number;
   maxTokens: number;
   temperature: number;
-
-  ASSETS?: any;
 }
 
 // ─── Runtime config sent to frontend ───
@@ -152,23 +160,26 @@ export interface SessionData {
 }
 
 // ─── Var docs for /api/config (human-readable reference) ───
+// ALL names in snake_case (matches dashboard display)
 export const VAR_DOCS: Record<string, { default: string; desc: string; group: string }> = {
   // ── Secrets (required) ──
   agnes_keys:      { default: '(empty)',  desc: 'Agnes Intl API keys, comma-separated',     group: 'Secrets' },
   agnes_cn_keys:   { default: '(empty)',  desc: 'Agnes China API keys, comma-separated',   group: 'Secrets' },
   zhipu_keys:      { default: '(empty)',  desc: 'Zhipu AI API keys, comma-separated',      group: 'Secrets' },
+  admin_password:  { default: '(empty)',  desc: 'Admin panel password (protects /admin)',  group: 'Secrets' },
+  admin_token:     { default: '(empty)',  desc: 'Session signing secret',                  group: 'Secrets' },
 
-  // ── URLs (optional overrides) ──
+  // ── Models (preset in wrangler.toml) ──
+  agnes_model:      { default: 'agnes-2.5-flash', desc: 'Agnes Intl model name',  group: 'Models' },
+  agnes_cn_model:   { default: 'agnes-2.5-flash', desc: 'Agnes China model name', group: 'Models' },
+  zhipu_model:      { default: 'glm-4v-flash',    desc: 'Zhipu model name',       group: 'Models' },
+
+  // ── URLs (preset in wrangler.toml) ──
   agnes_base_url:      { default: 'https://apihub.agnes-ai.com/v1',  desc: 'Agnes Intl API base URL',  group: 'URLs' },
   agnes_cn_base_url:   { default: 'https://apihub.agnes-ai.cn/v1',  desc: 'Agnes China API base URL', group: 'URLs' },
   zhipu_base_url:      { default: 'https://open.bigmodel.cn/api/paas/v4', desc: 'Zhipu API base URL', group: 'URLs' },
 
-  // ── Models (optional overrides) ──
-  agnes_model:      { default: 'agnes-2.5-flash',  desc: 'Agnes Intl model name',  group: 'Models' },
-  agnes_cn_model:   { default: 'agnes-2.5-flash',  desc: 'Agnes China model name', group: 'Models' },
-  zhipu_model:      { default: 'glm-4v-flash',     desc: 'Zhipu model name',       group: 'Models' },
-
-  // ── Tuning (optional, hardcoded defaults in config.ts) ──
+  // ── Tuning (hardcoded defaults in config.ts, editable via /admin) ──
   idle_timeout_ms:      { default: '1500',   desc: 'Idle ms before sending',            group: 'Tuning' },
   min_dist_px:           { default: '0.6',    desc: 'Min sampling distance (px)',        group: 'Tuning' },
   max_dist_px:           { default: '3.0',    desc: 'Max interpolation distance (px)',   group: 'Tuning' },

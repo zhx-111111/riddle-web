@@ -5,6 +5,11 @@
 import type { Env } from './types';
 import { setKvOverride, clearKvOverrides, getAllKvOverrides } from './config';
 
+// ─── Naming helpers ───
+function toCamel(s: string): string {
+  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
 // ─── KV helpers ───
 const KV_PREFIX = 'admin:config:';
 
@@ -376,7 +381,11 @@ export async function handleAdminGetConfig(request: Request, env: Env): Promise<
   const result: Record<string, any> = {};
   for (const name of allVars) {
     const docs = (VAR_DOCS as Record<string, any>)[name];
-    const fromEnv = (env as any)[name];
+    // Try snake_case first, then camelCase
+    let fromEnv = (env as any)[name];
+    if (fromEnv === undefined || fromEnv === '') {
+      fromEnv = (env as any)[toCamel(name)];
+    }
     const fromKv = kvConfig[name];
 
     let current, source;
@@ -498,8 +507,12 @@ function maskSecret(value: string): string {
 // ─── 供 chat.ts 调用 ───
 export function getMergedConfig(env: Env): Record<string, string> {
   const result: Record<string, string> = {};
+  // Convert all env vars to snake_case keys
   for (const [k, v] of Object.entries(env as any)) {
-    if (typeof v === 'string' && v !== '') result[k] = v;
+    if (typeof v === 'string' && v !== '') {
+      const snake = k.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
+      result[snake] = v;
+    }
   }
   const overrides = getAllKvOverrides();
   for (const [k, v] of Object.entries(overrides)) {

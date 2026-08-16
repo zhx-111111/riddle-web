@@ -1,6 +1,6 @@
 {
   "name": "riddle-web",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Tom Riddle's diary for the web — faithful port of MaximeRivest/Riddle",
   "scripts": {
     "build": "npm install",

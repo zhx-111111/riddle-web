@@ -17,27 +17,43 @@ id = "bb4cf971fa0740c9a5056f3541820c21"
 directory = "./dist"
 binding = "ASSETS"
 
-# ═════════════════════════════════════════════════════════
-# ⚠️  NO [vars] BLOCK HERE — INTENTIONAL
-# ═════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════
+# [vars] — These appear in Cloudflare dashboard → Settings → Variables
+# ═══════════════════════════════════════════════════════
+# IMPORTANT: Wrangler 4.x only recognizes known [assets] fields.
+# All custom vars MUST go in [vars] block below.
+# These 8 vars are the most commonly tweaked.
+# The other 20 params use hardcoded defaults in src/worker/config.ts
+# and are editable via /admin at runtime.
+# ═══════════════════════════════════════════════════════
+
+[vars]
+# ─── Model names (change to swap models without code deploy) ───
+agnesModel = "agnes-2.5-flash"
+agnesCnModel = "agnes-2.5-flash"
+zhipuModel = "glm-4v-flash"
+
+# ─── Base URLs ───
+agnesBaseUrl = "https://apihub.agnes-ai.com/v1"
+agnesCnBaseUrl = "https://apihub.agnes-ai.cn/v1"
+zhipuBaseUrl = "https://open.bigmodel.cn/api/paas/v4"
+
+# ─── Admin auth (plaintext fallback if Secrets not set) ───
+# IMPORTANT: Set admin_password + admin_token as Secrets in
+# the dashboard for real security. These are plaintext fallbacks.
+adminPassword = ""
+adminToken = "riddle-default-secret"
+
+# ═══════════════════════════════════════════════════════
+# REQUIRED SECRETS — Set in Dashboard → Settings → Variables → Add Secret
+# ═══════════════════════════════════════════════════════
+#   agnes_keys        → Agnes Intl API Key(s), comma-separated
+#   agnes_cn_keys     → Agnes China API Key(s), comma-separated (optional)
+#   zhipu_keys        → Zhipu AI API Key(s), comma-separated
+#   admin_password    → Admin panel password (protects /admin)
+#   admin_token       → Session signing secret (any random string)
 #
-# All 28 params have hardcoded defaults in src/worker/config.ts.
-# They are tunable at runtime via the /admin panel (PUT /api/admin/config).
-#
-# If you see OLD VARS in Cloudflare dashboard (idle_timeout_ms,
-# min_dist_px, poll_interval_ms, etc.), they are LEFTOVERS from
-# old deploys. DELETE THEM. They override config.ts defaults.
-#
-# Fastest cleanup:  bash clean-vars.sh
-# Manual cleanup:  Dashboard → Settings → Variables → Vars section
-#                 → click red trash icon on EVERY variable
-#
-# Required Secrets (Settings → Variables → Add Secret):
-#   agnes_keys      = Agnes Intl API Key(s), comma-separated
-#   agnes_cn_keys   = Agnes China API Key(s), comma-separated (opt)
-#   zhipu_keys      = Zhipu AI API Key(s), comma-separated
-#   admin_password  = Admin panel password (protects /admin)
-#   admin_token     = Session signing secret (any random string)
-#
-# That is it. 5 secrets, 0 vars. Clean.
-# ═════════════════════════════════════════════════════════
+# All other params (idle_timeout_ms, poll_interval_ms, etc.)
+# have hardcoded defaults in src/worker/config.ts.
+# They are visible & editable in the /admin panel at runtime.
+# ═══════════════════════════════════════════════════════

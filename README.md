@@ -1,185 +1,157 @@
-# Riddle Web — Tom Riddle's Diary
+# 🧙 Riddle Web — Tom Riddle's Diary for the Web
 
-A faithful web port of [MaximeRivest/Riddle](https://github.com/MaximeRivest/Riddle) — write with your finger or stylus, pause 1.5s, and Tom Riddle writes back in flowing handwriting that fades away like ink into paper.
+> *"Hello, Harry Potter. My name is Tom Riddle."*
+
+A faithful web port of [MaximeRivest/Riddle](https://github.com/MaximeRivest/Riddle) — write with your finger or stylus, the page drinks your ink, and Tom Riddle writes back in a flowing hand.
 
 ## ✨ Features
 
-- **Handwriting Input** — Finger & stylus with pressure-sensitive stroke width
-- **Silky Ink** — Catmull-Rom cubic Bézier + normal-offset variable-width fill, C1-continuous, zero jagged edges
-- **AI Handwritten Replies** — Vision LLM reads your strokes, replies sentence-by-sentence with stroke-by-stroke animation
-- **Auto-Fade** — Entire page dissolves 8s after reply completes
-- **Fullscreen** — Writing area only + floating toolbar (theme + fullscreen toggle)
-- **4 Themes** — Tom's Diary (dark) / Parchment / Midnight / Letter
-- **Landscape** — Follows system orientation automatically, no manual button
-- **Admin Panel `/admin`** — Visual config editor, changes take effect instantly without redeployment
-- **Multi-Provider Failover** — Agnes Intl + Agnes China + Zhipu AI with automatic key rotation
-- **Cross-Browser** — Chrome / Edge / Safari (iOS & macOS) / Firefox
+- **Handwritten input** — Finger or stylus on any touchscreen device
+- **Smooth ink** — Catmull-Rom → Cubic Bezier curves, pressure-mapped width, ink bleed effect
+- **Tom Riddle persona** — Faithful to the original HP books (Chamber of Secrets Ch.13 & 17)
+- **Multi-provider AI** — Agnes Intl + Agnes China + Zhipu AI (OpenAI-compatible)
+- **Sentence-by-sentence streaming** — SSE streaming with intelligent sentence segmentation
+- **Auto-fade** — Replies fade after 8 seconds, like ink being absorbed by the page
+- **Fullscreen mode** — Distraction-free writing, only theme + fullscreen buttons visible
+- **Cross-browser** — Chrome, Edge, Safari (iOS/macOS), Firefox
+- **Admin panel** (`/admin`) — Tune all 28 params at runtime, no redeploy needed
+- **KV-backed memory** — Conversation history persists 24h
 
-## 🚀 Deploy to Cloudflare Workers
+## 🚀 Quick Deploy (Cloudflare Workers)
 
-### Step 1: Push to GitHub
+### Step 1: Fork & Connect
 
-```bash
-git clone https://github.com/zhx-111111/riddle-web.git
-cd riddle-web
-# push to your own fork or this repo directly
-```
+1. Fork this repo to your GitHub account
+2. Go to [Cloudflare Dashboard](https://dash.cloudflare.com) → Workers & Pages → Create
+3. Connect Git → Select your fork → Framework preset: `None`
 
-### Step 2: Cloudflare Dashboard Setup
+### Step 2: Set Secrets (5 required)
 
-1. Go to **dash.cloudflare.com** → **Workers & Pages** → **Create** → **Connect to Git**
-2. Select this repo
-3. Framework preset: **None** (Wrangler config is in `wrangler.toml`)
+Dashboard → Settings → Variables → **Add Secret** (encrypted):
 
-### Step 3: Add Secrets (5 required, that's it)
-
-Go to **Settings → Variables and Secrets** → **Add Secret**:
-
-| Secret Name | What to put |
-|---|---|
-| `agnes_keys` | Your Agnes Intl API key(s), comma-separated |
-| `agnes_cn_keys` | Agnes China key(s), comma-separated **(optional)** |
-| `zhipu_keys` | Zhipu AI key(s), comma-separated **(recommended, free fallback)** |
-| `admin_password` | Password to access `/admin` panel |
-| `admin_token` | Any random string for session signing |
-
-### Step 4: Bind KV
-
-**Settings → Bindings** → **Add** → **KV Namespace** → Create new → Name: `riddle-kv` → Variable name: `RIDDLE_KV`
-
-### Step 5: Deploy
-
-Go to **Deployments** → **Retry deployment** → Wait for green ✅
-
----
-
-## ⚠️ IMPORTANT: Why Are There 18+ Variables in Your Dashboard?
-
-### The Root Cause
-
-Earlier versions declared all 28 parameters in `wrangler.toml`'s `[vars]` block. When Wrangler deployed, it **wrote those vars into your Cloudflare dashboard**. Later versions removed the `[vars]` block — but **Cloudflare never auto-deletes dashboard vars**. They just sit there.
-
-### Why This Breaks Things
-
-Those stale vars **override the hardcoded defaults** in `src/worker/config.ts`. If an old `idle_timeout_ms=3000` is sitting in your dashboard, it will override the code's `1500` default, even though the `[vars]` block is gone from `wrangler.toml`.
-
-### How to Fix — Three Options
-
-#### Option A: Wrangler CLI (fastest)
-
-```bash
-# Install wrangler
-npm install -g wrangler
-wrangler login
-
-# Run the included cleanup script
-bash clean-vars.sh
-```
-
-Or manually, one line per var:
-
-```bash
-wrangler vars delete idle_timeout_ms --script-name riddle-web --yes
-wrangler vars delete min_dist_px --script-name riddle-web --yes
-wrangler vars delete max_dist_px --script-name riddle-web --yes
-wrangler vars delete pressure_min_px --script-name riddle-web --yes
-wrangler vars delete pressure_max_px --script-name riddle-web --yes
-wrangler vars delete poll_interval_ms --script-name riddle-web --yes
-wrangler vars delete stroke_interval_ms --script-name riddle-web --yes
-wrangler vars delete stroke_max_dur_ms --script-name riddle-web --yes
-wrangler vars delete svg_stroke_width --script-name riddle-web --yes
-wrangler vars delete max_lines --script-name riddle-web --yes
-wrangler vars delete line_height_px --script-name riddle-web --yes
-wrangler vars delete margin_top_px --script-name riddle-web --yes
-wrangler vars delete margin_x_px --script-name riddle-web --yes
-wrangler vars delete font_size_px --script-name riddle-web --yes
-wrangler vars delete reply_fade_delay_ms --script-name riddle-web --yes
-wrangler vars delete fade_duration_ms --script-name riddle-web --yes
-wrangler vars delete history_ttl_sec --script-name riddle-web --yes
-wrangler vars delete max_history_turns --script-name riddle-web --yes
-wrangler vars delete max_retries --script-name riddle-web --yes
-wrangler vars delete request_timeout_ms --script-name riddle-web --yes
-wrangler vars delete max_tokens --script-name riddle-web --yes
-wrangler vars delete temperature --script-name riddle-web --yes
-wrangler vars delete agnes_base_url --script-name riddle-web --yes
-wrangler vars delete agnes_cn_base_url --script-name riddle-web --yes
-wrangler vars delete zhipu_base_url --script-name riddle-web --yes
-wrangler vars delete agnes_model --script-name riddle-web --yes
-wrangler vars delete agnes_cn_model --script-name riddle-web --yes
-wrangler vars delete zhipu_model --script-name riddle-web --yes
-```
-
-Verify cleanup:
-
-```bash
-wrangler vars list --script-name riddle-web
-# Should show: 0 vars (all parameters live in config.ts defaults)
-```
-
-#### Option B: Dashboard (manual)
-
-1. Open **Cloudflare Dashboard → Workers & Pages → riddle-web → Settings → Variables and Secrets**
-2. In the **"Vars" section** (plaintext, NOT Secrets), click the red trash icon next to each variable
-3. Delete all of them — every single one
-4. After deletion, Vars section should show **0 entries**
-
-#### Option C: Ignore (not recommended)
-
-If you don't delete them, the old values will silently override your code defaults. Your diary will still work, but timing/ink behavior may be unpredictable.
-
-### What You Should See After Cleanup
-
-| Section | Count | Contents |
+| Variable | Value | Required |
 |---|---|---|
-| **Vars** (plaintext) | **0** | Empty — all defaults live in `config.ts` |
-| **Secrets** (encrypted) | **5** | `agnes_keys`, `agnes_cn_keys`, `zhipu_keys`, `admin_password`, `admin_token` |
+| `agnes_keys` | Your Agnes Intl API key(s), comma-separated | ✅ Recommended |
+| `zhipu_keys` | Your Zhipu AI API key(s), comma-separated | ✅ Recommended (free) |
+| `admin_password` | Your admin panel password | ✅ Required |
+| `admin_token` | Any random string (session signing) | ✅ Required |
+| `agnes_cn_keys` | Your Agnes China API key(s) | ⬜ Optional |
 
-That's it. Clean and minimal.
+### Step 3: Bind KV
 
----
+Dashboard → **Bindings** → Add → KV Namespace → Create new → name: `riddle-kv` → binding: `RIDDLE_KV`
 
-## 🔧 Admin Panel Usage
+### Step 4: Deploy
 
-Open `https://your-domain/admin` → Enter `admin_password` → All 28 params organized in 5 groups:
+Dashboard → Deployments → **Retry deployment** → Wait for green ✅
 
-- **API Keys** — Provider keys (displayed as `sk-ab••••••cd`)
-- **Models & URLs** — Model names and API endpoints
-- **Timing** — Animation speed, timeouts, fade delays
-- **Ink & Display** — Stroke width range, sampling distance, font size
-- **Memory & Backend** — History turns, retry count, temperature
+## 🔑 Getting API Keys
 
-Edit any value → Click **💾 保存修改** → Takes effect instantly, no redeployment needed.
+| Provider | Sign up at | Free? |
+|---|---|---|
+| **Agnes Intl** | https://platform.agnes-ai.com | Credits on signup |
+| **Agnes China** | https://platform.agnes-ai.cn | Credits on signup |
+| **Zhipu AI** | https://open.bigmodel.cn | ✅ Free tier (GLM-4V-Flash) |
 
-> The admin panel UI is in **Chinese** (管理后台). The frontend diary UI is **English only** — no admin入口 visible to users.
+## ⚙️ Configuration
 
----
+### Environment Variables (auto-preset in wrangler.toml)
+
+These 8 vars appear automatically in your dashboard after first deploy:
+
+| Variable | Default | Description |
+|---|---|---|
+| `agnesModel` | `agnes-2.5-flash` | Agnes Intl model |
+| `agnesCnModel` | `agnes-2.5-flash` | Agnes China model |
+| `zhipuModel` | `glm-4v-flash` | Zhipu model |
+| `agnesBaseUrl` | `https://apihub.agnes-ai.com/v1` | Agnes Intl API URL |
+| `agnesCnBaseUrl` | `https://apihub.agnes-ai.cn/v1` | Agnes China API URL |
+| `zhipuBaseUrl` | `https://open.bigmodel.cn/api/paas/v4` | Zhipu API URL |
+| `adminPassword` | _(empty)_ | Plaintext fallback (use Secret instead) |
+| `adminToken` | `riddle-default-secret` | Plaintext fallback (use Secret instead) |
+
+### All 28 Parameters
+
+The remaining 20 params have hardcoded defaults in `src/worker/config.ts` and are
+**fully editable at runtime via the `/admin` panel** — no redeploy needed:
+
+| Group | Params |
+|---|---|
+| **Writing** | `idle_timeout_ms`, `min_dist_px`, `max_dist_px`, `pressure_min_px`, `pressure_max_px` |
+| **Animation** | `poll_interval_ms`, `stroke_interval_ms`, `stroke_max_dur_ms`, `svg_stroke_width`, `max_lines`, `line_height_px`, `margin_top_px`, `margin_x_px`, `font_size_px` |
+| **Lifecycle** | `reply_fade_delay_ms`, `fade_duration_ms`, `history_ttl_sec` |
+| **Backend** | `max_history_turns`, `max_retries`, `request_timeout_ms`, `max_tokens`, `temperature` |
+
+### Admin Panel
+
+Visit `https://your-domain/admin` → Enter password → Tune everything live.
+
+Changes save to KV and take effect immediately across all Worker instances.
+
+## 📱 Usage
+
+1. Open your deployed URL on any touchscreen device
+2. Write a question with your finger or stylus
+3. Wait 1.5 seconds after the last stroke
+4. Watch your ink fade away... and Tom's reply write itself onto the page
+5. After 8 seconds, the reply fades too — write again to continue the conversation
 
 ## 🏗️ Architecture
 
 ```
-Browser (English UI, zero admin entry)
-  ├── /              → Diary writing page
-  ├── /api/config    → GET runtime config
-  ├── /api/chat      → POST strokes PNG → SSE sentence stream
-  ├── /api/setup     → GET diagnostics
-  ├── /api/init      → POST create session
-  ├── /api/health    → GET health check
+Browser
   │
-  └── /admin         → Admin panel (password-protected, Chinese UI)
-        ├── GET  /admin/login      → Login page
-        ├── POST /api/admin/login  → Verify password
-        ├── GET  /api/admin/config → List all params
-        ├── PUT  /api/admin/config → Update params (KV-persisted)
-        └── POST /api/admin/reload → Force reload all instances
+  ├── /                     → Diary frontend (zero admin UI)
+  ├── /api/chat             → AI conversation (public)
+  ├── /api/setup            → Diagnostics (public)
+  ├── /api/config           → Runtime config (public, read-only)
+  │
+  └── /admin                → Admin panel (password protected)
+        ├── /admin/login           → Password page
+        ├── /api/admin/login       → Verify password
+        ├── /api/admin/config      → GET / PUT configuration
+        └── /api/admin/reload     → Force reload all instances
 ```
 
-## 📝 Variable Naming Rules
+## 📂 Project Structure
 
-- **All lowercase** (e.g. `agnes_keys` not `AGNES_KEYS`)
-- **Multi-key separator: comma `,`** → `sk-abc123,sk-def456,sk-ghi789`
-- **Hardcoded defaults** in `src/worker/config.ts` — overridable via `/admin` at runtime
-- **KV overrides** (set via admin panel) take highest priority, then Secrets, then defaults
+```
+riddle-web/
+├── wrangler.toml              ← Cloudflare config + 8 preset vars
+├── package.json
+├── tsconfig.json
+├── README.md
+├── DEPLOY.md
+│
+├── dist/                       ← Frontend (served as static assets)
+│   ├── index.html             ← Diary page (zero admin entry)
+│   ├── styles.css             ← 4 themes + responsive + fullscreen
+│   └── app.js                ← Ink capture + bezier rendering + SSE
+│
+└── src/worker/                ← Backend (TypeScript, compiled by Wrangler)
+    ├── index.ts               ← Worker entry + routing
+    ├── types.ts               ← Env interface (dual naming) + VAR_DOCS
+    ├── config.ts              ← All defaults + KV overrides + dual-name lookup
+    ├── chat.ts                ← Multi-provider AI + SSE streaming + persona
+    ├── admin.ts               ← /admin panel + auth + config CRUD
+    ├── health.ts              ← /api/health
+    └── init.ts                ← /api/init (session setup)
+```
 
-## 📄 License
+## 🔒 Security
+
+- **Admin password** — SHA-256 hashed, stored as Cloudflare Secret
+- **Session cookie** — HttpOnly + SameSite=Strict + 1-hour expiry
+- **Brute-force protection** — 5 failed attempts → 5-minute lockout
+- **Secret masking** — API keys shown as `sk-a••••••••w3f2` in admin UI
+- **No admin entry in frontend** — `/admin` only accessible via direct URL
+
+## 📜 License
 
 MIT
+
+## 🙏 Credits
+
+- Original concept: [MaximeRivest/Riddle](https://github.com/MaximeRivest/Riddle) (reMarkable Paper Pro)
+- Tom Riddle persona based on J.K. Rowling's *Harry Potter and the Chamber of Secrets*
+- Built with Cloudflare Workers + Workers KV + OpenAI-compatible APIs

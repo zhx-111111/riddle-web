@@ -1,6 +1,7 @@
 // ═════════════════════════════════════════════════════════
 // config.ts — All values lowercase, defaults hardcoded
 // Supports KV overrides via admin panel
+// Compatible with BOTH camelCase (agnesKeys) and snake_case (agnes_keys)
 // ═════════════════════════════════════════════════════════
 
 import type { Env, RuntimeConfig } from './types';
@@ -59,36 +60,70 @@ export function getAllKvOverrides(): Record<string, string> {
 }
 
 // ═════════════════════════════════════════════════════════
+// Variable name mapping: snake_case ↔ camelCase
+// Cloudflare injects vars as-is from dashboard.
+// Dashboard shows snake_case, but JS object access is camelCase.
+// We try BOTH for every lookup.
+// ═════════════════════════════════════════════════════════
+
+// snake_case → camelCase converter
+function toCamel(s: string): string {
+  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+// camelCase → snake_case converter
+function toSnake(s: string): string {
+  return s.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
+}
+
+// Read from raw env with dual-name support
+function readRaw(raw: any, camelName: string): any {
+  // Try camelCase first (e.g. "agnesKeys")
+  if (raw[camelName] !== undefined && raw[camelName] !== '') {
+    return raw[camelName];
+  }
+  // Try snake_case (e.g. "agnes_keys")
+  const snake = toSnake(camelName);
+  if (raw[snake] !== undefined && raw[snake] !== '') {
+    return raw[snake];
+  }
+  return undefined;
+}
+
+// ═════════════════════════════════════════════════════════
 // Helpers
 // ═════════════════════════════════════════════════════════
-function num(env: Env, key: keyof Env, fallback: number): number {
-  // 1. Check KV override first
-  const override = kvOverrides.get(key as string);
+function num(raw: any, camelName: string, fallback: number): number {
+  // 1. Check KV override first (admin panel writes snake_case keys)
+  const snakeName = toSnake(camelName);
+  const override = kvOverrides.get(snakeName);
   if (override !== undefined) {
     const p = parseFloat(override);
     if (!isNaN(p)) return p;
   }
-  // 2. Check env (from Cloudflare Secrets/Vars)
-  const v = env[key] as unknown as string | number | undefined;
+  // 2. Check env (try both naming conventions)
+  const v = readRaw(raw, camelName);
   if (v === undefined || v === '' || v === null) return fallback;
   if (typeof v === 'number') return v;
   const p = parseFloat(v);
   return isNaN(p) ? fallback : p;
 }
 
-function str(env: Env, key: keyof Env, fallback: string): string {
-  const override = kvOverrides.get(key as string);
+function str(raw: any, camelName: string, fallback: string): string {
+  const snakeName = toSnake(camelName);
+  const override = kvOverrides.get(snakeName);
   if (override !== undefined) return override;
-  const v = env[key] as unknown as string | undefined;
+  const v = readRaw(raw, camelName);
   if (v === undefined || v === '' || v === null) return fallback;
-  return v;
+  return String(v);
 }
 
-function parseKeys(env: Env, key: keyof Env): string[] {
-  const override = kvOverrides.get(key as string);
-  const raw = override !== undefined ? override : (env[key] as unknown as string | undefined);
-  if (!raw) return [];
-  return Array.from(new Set(raw.split(',').map(k => k.trim()).filter(k => k.length > 0)));
+function parseKeys(raw: any, camelName: string): string[] {
+  const snakeName = toSnake(camelName);
+  const override = kvOverrides.get(snakeName);
+  const raw_val = override !== undefined ? override : readRaw(raw, camelName);
+  if (!raw_val) return [];
+  return Array.from(new Set(String(raw_val).split(',').map(k => k.trim()).filter(k => k.length > 0)));
 }
 
 // ═════════════════════════════════════════════════════════
@@ -185,23 +220,60 @@ export function buildBackendConfig(env: Env) {
 
 // ═════════════════════════════════════════════════════════
 // GET /api/config — show all vars + current values
-// ═══════════════════════════════════════════════════════
+// Uses snake_case names (matches dashboard + admin panel)
+// ═════════════════════════════════════════════════════════
 export function handleConfigRequest(env: Env): Response {
   const groups: Record<string, any[]> = {};
+
+  // Build a lookup from snake_case name → current value
+  const currentValues: Record<string, any> = {
+    'agnes_keys':          env.agnesKeys.join(','),
+    'agnes_cn_keys':       env.agnesCnKeys.join(','),
+    'zhipu_keys':          env.zhipuKeys.join(','),
+    'admin_password':      env.adminPassword,
+    'admin_token':         env.adminToken,
+    'agnes_base_url':      env.agnesBaseUrl,
+    'agnes_cn_base_url':   env.agnesCnBaseUrl,
+    'zhipu_base_url':      env.zhipuBaseUrl,
+    'agnes_model':         env.agnesModel,
+    'agnes_cn_model':      env.agnesCnModel,
+    'zhipu_model':         env.zhipuModel,
+    'idle_timeout_ms':     env.idleTimeoutMs,
+    'min_dist_px':         env.minDistPx,
+    'max_dist_px':         env.maxDistPx,
+    'pressure_min_px':     env.pressureMinPx,
+    'pressure_max_px':     env.pressureMaxPx,
+    'poll_interval_ms':    env.pollIntervalMs,
+    'stroke_interval_ms':  env.strokeIntervalMs,
+    'stroke_max_dur_ms':   env.strokeMaxDurMs,
+    'svg_stroke_width':    env.svgStrokeWidth,
+    'max_lines':           env.maxLines,
+    'line_height_px':      env.lineHeightPx,
+    'margin_top_px':       env.marginTopPx,
+    'margin_x_px':         env.marginXPx,
+    'font_size_px':        env.fontSizePx,
+    'reply_fade_delay_ms': env.replyFadeDelayMs,
+    'fade_duration_ms':    env.fadeDurationMs,
+    'history_ttl_sec':     env.historyTtlSec,
+    'max_history_turns':   env.maxHistoryTurns,
+    'max_retries':         env.maxRetries,
+    'request_timeout_ms':  env.requestTimeoutMs,
+    'max_tokens':          env.maxTokens,
+    'temperature':         env.temperature,
+  };
+
   for (const [varName, info] of Object.entries(VAR_DOCS)) {
     const override = kvOverrides.get(varName);
-    const fromEnv = (env as any)[varName];
-    const current = override !== undefined ? override
-                  : fromEnv !== undefined && fromEnv !== '' ? fromEnv
-                  : info.default;
-    const source = override !== undefined ? 'kv'
-                  : fromEnv !== undefined && fromEnv !== '' ? 'env'
-                  : 'default';
+    const current = override !== undefined ? override : currentValues[varName];
 
     const isSecret = varName.includes('keys') || varName.includes('password') || varName.includes('token');
     const displayValue = isSecret && current && String(current).length > 8
       ? String(current).substring(0, 4) + '•'.repeat(Math.max(0, String(current).length - 8)) + String(current).substring(String(current).length - 4)
-      : current;
+      : (current ?? info.default);
+
+    const source = override !== undefined ? 'kv'
+                  : current !== undefined && current !== '' && current !== info.default ? 'env'
+                  : 'default';
 
     const entry = {
       var: varName,
@@ -217,8 +289,9 @@ export function handleConfigRequest(env: Env): Response {
 
   const response = {
     status: 'ok',
-    secrets_needed: ['agnes_keys', 'agnes_cn_keys (optional)', 'zhipu_keys (recommended)'],
-    vars_optional: 'All other vars have hardcoded defaults in src/worker/config.ts.',
+    secrets_needed: ['agnes_keys', 'agnes_cn_keys (optional)', 'zhipu_keys (recommended)', 'admin_password', 'admin_token'],
+    vars_preset_in_wrangler: ['agnesModel', 'agnesCnModel', 'zhipuModel', 'agnesBaseUrl', 'agnesCnBaseUrl', 'zhipuBaseUrl', 'adminPassword', 'adminToken'],
+    note: 'Other vars use hardcoded defaults in config.ts. All 28 params editable via /admin panel.',
     runtime: buildRuntimeConfig(env),
     groups,
   };
