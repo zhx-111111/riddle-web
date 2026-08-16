@@ -18,31 +18,34 @@ directory = "./dist"
 binding = "ASSETS"
 
 # ═══════════════════════════════════════════════════════
-# [vars] — These appear in Cloudflare dashboard → Settings → Variables
+# [vars] — These auto-appear in Cloudflare Dashboard
+#           → Settings → Variables (Vars section)
 # ═══════════════════════════════════════════════════════
-# IMPORTANT: Wrangler 4.x only recognizes known [assets] fields.
-# All custom vars MUST go in [vars] block below.
+# IMPORTANT: All var names are snake_case to match what the
+# Dashboard displays. The code in config.ts reads BOTH
+# snake_case and camelCase, so this works either way.
+#
 # These 8 vars are the most commonly tweaked.
-# The other 20 params use hardcoded defaults in src/worker/config.ts
+# The other 20 params use hardcoded defaults in config.ts
 # and are editable via /admin at runtime.
 # ═══════════════════════════════════════════════════════
 
 [vars]
 # ─── Model names (change to swap models without code deploy) ───
-agnesModel = "agnes-2.5-flash"
-agnesCnModel = "agnes-2.5-flash"
-zhipuModel = "glm-4v-flash"
+agnes_model = "agnes-2.5-flash"
+agnes_cn_model = "agnes-2.5-flash"
+zhipu_model = "glm-4v-flash"
 
 # ─── Base URLs ───
-agnesBaseUrl = "https://apihub.agnes-ai.com/v1"
-agnesCnBaseUrl = "https://apihub.agnes-ai.cn/v1"
-zhipuBaseUrl = "https://open.bigmodel.cn/api/paas/v4"
+agnes_base_url = "https://apihub.agnes-ai.com/v1"
+agnes_cn_base_url = "https://apihub.agnes-ai.cn/v1"
+zhipu_base_url = "https://open.bigmodel.cn/api/paas/v4"
 
 # ─── Admin auth (plaintext fallback if Secrets not set) ───
 # IMPORTANT: Set admin_password + admin_token as Secrets in
 # the dashboard for real security. These are plaintext fallbacks.
-adminPassword = ""
-adminToken = "riddle-default-secret"
+admin_password = ""
+admin_token = "riddle-default-secret"
 
 # ═══════════════════════════════════════════════════════
 # REQUIRED SECRETS — Set in Dashboard → Settings → Variables → Add Secret

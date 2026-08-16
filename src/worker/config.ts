@@ -77,15 +77,16 @@ function toSnake(s: string): string {
 }
 
 // Read from raw env with dual-name support
+// Priority: snake_case first (matches wrangler.toml [vars] + Dashboard display)
 function readRaw(raw: any, camelName: string): any {
-  // Try camelCase first (e.g. "agnesKeys")
-  if (raw[camelName] !== undefined && raw[camelName] !== '') {
-    return raw[camelName];
-  }
-  // Try snake_case (e.g. "agnes_keys")
   const snake = toSnake(camelName);
+  // Try snake_case first (e.g. "agnes_keys") — this is what wrangler.toml sets
   if (raw[snake] !== undefined && raw[snake] !== '') {
     return raw[snake];
+  }
+  // Fallback to camelCase (e.g. "agnesKeys") — for direct code overrides
+  if (raw[camelName] !== undefined && raw[camelName] !== '') {
+    return raw[camelName];
   }
   return undefined;
 }
