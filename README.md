@@ -4,22 +4,28 @@
 
 A faithful web port of [MaximeRivest/Riddle](https://github.com/MaximeRivest/Riddle) — write on the page with your finger or stylus, pause 1.5 seconds, and watch Tom Riddle write back stroke by stroke in his own hand.
 
-## ✨ Features
+## ✨ Features (v3.8)
 
-- **Real ink** — Catmull-Rom splines with pressure-sensitive variable-width strokes
-- **Smooth writing** — 120Hz adaptive sampling, zero jagged edges
-- **Tom Riddle persona** — Faithful to the original novels (Books 2 & 6)
+- **Ultra-smooth ink** — Catmull-Rom → Cubic Bezier with variable-width filled shapes, zero jagged edges
+- **Fluent writing** — 120Hz adaptive sampling, pointer events + touch fallback
+- **Tom Riddle persona** — Faithful to the original novels (Chamber of Secrets)
 - **Multi-provider AI** — Agnes (Intl + China) & Zhipu, with automatic failover
 - **Self-fading replies** — Ink dissolves into the page after 8 seconds
-- **Fullscreen + Landscape** — Immersive writing experience
+- **Fullscreen mode** — Writing area only, floating theme + fullscreen toggles
 - **Admin panel** (`/admin`) — Edit all 28 parameters live, no redeploy needed
 - **Cross-browser** — Chrome, Safari (iOS/macOS), Firefox, Edge
+- **Landscape** — Pure system-follow (no manual button)
 
 ## 🚀 Quick Deploy
 
 See [DEPLOY.md](./DEPLOY.md) for full instructions.
 
-## 📝 Writing
+### 3-step summary:
+1. **Fork** this repo → Connect to **Cloudflare Pages**
+2. **Add Secrets** (5): `agnes_keys`, `zhipu_keys`, `admin_password`, `admin_token`, `agnes_cn_keys` (optional)
+3. **Bind KV** namespace as `RIDDLE_KV` → Deploy
+
+## ✍️ Writing
 
 1. Open the page
 2. Write with your finger or stylus
@@ -35,10 +41,13 @@ All 28 parameters are editable at runtime via `/admin` (password protected):
 | Category | Params |
 |---|---|
 | API Keys | `agnes_keys`, `agnes_cn_keys`, `zhipu_keys` |
-| Models | `agnes_model`, `zhipu_model`, base URLs |
+| Models | `agnes_model`, `agnes_cn_model`, `zhipu_model` |
+| URLs | `agnes_base_url`, `agnes_cn_base_url`, `zhipu_base_url` |
 | Timing | `idle_timeout_ms`, `poll_interval_ms`, `stroke_interval_ms` |
-| Ink | `pressure_min_px`, `pressure_max_px`, `min_dist_px` |
+| Ink | `pressure_min_px`, `pressure_max_px`, `min_dist_px`, `max_dist_px` |
+| Display | `font_size_px`, `line_height_px`, `margin_top_px`, `margin_x_px` |
 | Lifecycle | `reply_fade_delay_ms`, `fade_duration_ms`, `max_history_turns` |
+| Backend | `max_retries`, `request_timeout_ms`, `max_tokens`, `temperature` |
 
 ## 📄 License
 

@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════════
 
 import type { Env } from './types';
+import { VAR_DOCS } from './types';
 import { setKvOverride, clearKvOverrides, getAllKvOverrides } from './config';
 
 // ─── Naming helpers ───
@@ -910,7 +911,6 @@ export async function handleAdminGetConfig(request: Request, env: Env): Promise<
   const kvConfig = await kvGetAll(env.RIDDLE_KV);
 
   const allVars = new Set<string>();
-  const { VAR_DOCS } = await import('./types');
   for (const name of Object.keys(VAR_DOCS)) allVars.add(name);
   allVars.add('admin_password');
   allVars.add('admin_token');
@@ -956,7 +956,6 @@ export async function handleAdminPutConfig(request: Request, env: Env): Promise<
     return jsonResponse({ message: '请求体格式错误' }, 400);
   }
 
-  const { VAR_DOCS } = await import('./types');
   const allowedKeys = new Set(Object.keys(VAR_DOCS));
   allowedKeys.add('admin_password');
   allowedKeys.add('admin_token');

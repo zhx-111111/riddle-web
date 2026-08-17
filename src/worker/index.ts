@@ -6,6 +6,7 @@ import { handleChatRequest, handleSetupRequest } from './chat';
 import { handleHealth } from './health';
 import { handleInit } from './init';
 import { handleConfigRequest, buildEnv } from './config';
+import { handleDebugInfo, handleDebugKv } from './debug';
 import {
   handleAdminLoginPage,
   handleAdminLogin,
@@ -74,6 +75,14 @@ export default {
       }
       if (path === '/api/health' && request.method === 'GET') {
         return handleHealth();
+      }
+
+      // ─── Debug routes (temporary, remove after fixing 500) ───
+      if (path === '/api/debug' && request.method === 'GET') {
+        return handleDebugInfo(env);
+      }
+      if (path === '/api/debug/kv' && request.method === 'GET') {
+        return await handleDebugKv(env);
       }
 
       // Static assets
