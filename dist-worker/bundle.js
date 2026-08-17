@@ -954,7 +954,7 @@ fetch('/api/setup').then(r=>r.json()).then(data=>{
 }).catch(err=>{
   document.getElementById('status').innerHTML = '<div class="item"><span class="label">Error</span><span class="value err">'+err.message+'</span></div>';
 });
-<\/script>
+</script>
 </body></html>`;
   return new Response(html, {
     headers: {
@@ -1201,7 +1201,7 @@ form.addEventListener("submit",async(e)=>{
 });
 // Enter key
 document.getElementById("pw").addEventListener("keydown",(e)=>{if(e.key==="Enter")form.requestSubmit();});
-<\/script>
+</script>
 </body></html>`;
 var ADMIN_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1771,7 +1771,7 @@ document.addEventListener('keydown', (e) => {
 // \u521D\u59CB\u5316
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 loadConfig();
-<\/script>
+</script>
 </body></html>`;
 function handleAdminLoginPage() {
   return new Response(LOGIN_HTML, {

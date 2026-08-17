@@ -1,4 +1,4 @@
-// build-worker.js — esbuild bundle for local development
+// build-worker.js — esbuild bundle for Cloudflare Workers
 const esbuild = require('esbuild');
 const path = require('path');
 
@@ -8,7 +8,7 @@ esbuild.build({
   outfile: path.join(__dirname, 'dist-worker/bundle.js'),
   format: 'esm',
   target: 'es2022',
-  platform: 'browser', // Workers runtime is close to browser
+  platform: 'neutral',
   conditions: ['worker', 'browser'],
   minify: false,
   sourcemap: true,

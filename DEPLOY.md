@@ -1,75 +1,105 @@
-# Riddle Web — Quick Deploy Guide
+# Riddle Web — Deployment Guide
 
-## 1. Push to GitHub
+## Quick Deploy to Cloudflare Pages
 
-```bash
-cd riddle-web
-git add -A
-git commit -m "v3.4: clean dashboard vars + CLI cleanup script + EN docs"
-git push https://zhx-111111:YOUR_TOKEN@github.com/zhx-111111/riddle-web.git main
-```
+### Prerequisites
+- A Cloudflare account (free tier works)
+- A GitHub repository with this code
+- API keys from at least one provider (Agnes or Zhipu)
 
-## 2. Cloudflare Dashboard (3 steps)
+### Step 1: Connect GitHub to Cloudflare Pages
+1. Go to **Cloudflare Dashboard → Workers & Pages → Create**
+2. Choose **Pages** → **Connect to Git**
+3. Select your `riddle-web` repo → **Begin Setup**
 
-### A. Connect Git
-Workers & Pages → Create → Connect Git → Select `riddle-web`
+### Step 2: Build Settings
+| Setting | Value |
+|---|---|
+| Framework preset | `None` |
+| Build command | `npm install && node build-worker.js` |
+| Build output directory | `dist` |
+| Root directory | `/` |
 
-### B. Set 4-5 Secrets
-Settings → Variables and Secrets → Add Secret:
+> The `wrangler.toml` already configures `main = "dist-worker/bundle.js"` which is produced by the build step.
 
-```
-agnes_keys      = your_agnes_intl_key
-zhipu_keys      = your_zhipu_key
-admin_password  = your_admin_password
-admin_token     = any_random_string
-agnes_cn_keys   = (optional) your_agnes_china_key
-```
+### Step 3: Environment Variables (Secrets — required)
+Go to **Settings → Variables → Add Secret**:
 
-### C. Bind KV
-Bindings → Add → KV Namespace → Create `riddle-kv` → Bind as `RIDDLE_KV`
+| Variable | What to put |
+|---|---|
+| `agnes_keys` | Your Agnes Intl API key(s), comma-separated |
+| `zhipu_keys` | Your Zhipu AI API key(s), comma-separated |
+| `admin_password` | Password for `/admin` panel access |
+| `admin_token` | Any random string (session signing) |
+| `agnes_cn_keys` | (Optional) Agnes China API keys |
 
-## 3. ⚠️ CLEAN UP OLD VARS (critical!)
+### Step 4: KV Binding
+1. **Workers & Pages → KV** → Create namespace → name it `riddle-kv`
+2. Copy the namespace ID
+3. In your repo, update `wrangler.toml` → `[[kv_namespaces]]` → `id = "your-kv-id"`
+4. Or in Dashboard → **Settings → Bindings** → Add → KV → `RIDDLE_KV`
 
-When you open **Settings → Variables** in the Cloudflare dashboard, you will likely see **18+ plaintext variables** left over from old deploys:
-`idle_timeout_ms`, `min_dist_px`, `poll_interval_ms`, etc.
+### Step 5: Deploy
+- Push to `main` branch → Cloudflare auto-deploys
+- Or hit **Retry Deployment** manually
 
-**These must be deleted.** They override the hardcoded defaults in `config.ts` and cause unpredictable behavior.
-
-### Fastest method — Wrangler CLI:
-
-```bash
-# Install wrangler (one-time)
-npm install -g wrangler && wrangler login
-
-# Run the included cleanup script
-bash clean-vars.sh
-```
-
-### Manual method — Dashboard:
-
-1. Go to **Settings → Variables and Secrets**
-2. In the **Vars section** (plaintext, NOT the Secrets section with the 🔒 icon)
-3. Click the **red trash icon** next to each variable
-4. Delete ALL of them — every single one
-5. After cleanup: **Vars = 0 entries**, only Secrets remain
-
-> **Why does this happen?** Old versions declared vars in `wrangler.toml`'s `[vars]` block. Wrangler wrote them to the dashboard. Removing `[vars]` from the file does NOT auto-delete them from the dashboard. Cloudflare keeps them forever until you manually remove them.
-
-## 4. Deploy
-Deployments → Retry deployment → wait for green ✅
-
-## 5. Verify
-- Open `https://your-domain.workers.dev` → should show diary UI (English)
-- Open `https://your-domain.workers.dev/api/setup` → should show all `configured: true`
-- Open `https://your-domain.workers.dev/admin` → login with your admin_password (Chinese UI)
+### Step 6: Verify
+1. Open `https://your-domain.pages.dev` → should show the diary
+2. Open `https://your-domain.pages.dev/api/setup` → should show `status: "ok"` and providers configured
+3. Open `https://your-domain.pages.dev/admin` → login with your admin password
 
 ## Troubleshooting
 
-| Issue | Fix |
-|---|---|
-| "All Providers failed" | Check `/api/setup` — keys not loaded. Re-add Secrets. |
-| Deploy fails with "10021" | Old `[vars]` in dashboard. Run `clean-vars.sh` or delete manually. |
-| Admin panel shows empty values | Logged out. Cookies expired. Login again. |
-| Ink looks jagged | Clear browser cache, hard reload. DPR capped at 3. |
-| Fullscreen not working | Safari needs user gesture. Tap the button directly. |
-| Variables keep reappearing | You re-added them, or an old `wrangler.toml` with `[vars]` got deployed. Check git history. |
+### "Command failed with exit code 1: npm install && node build-worker.js"
+- Check that `package.json` includes `esbuild` in devDependencies
+- Check that `build-worker.js` exists in repo root
+- Verify Node.js version ≥ 18 in Cloudflare build environment
+
+### "The diary is thinking..." forever
+- Check `/api/setup` — are providers showing `configured: true`?
+- Check Secrets are set correctly (no extra spaces, correct format)
+- Check Cloudflare Workers logs for errors
+
+### Variables not appearing in Dashboard
+- They are set in `wrangler.toml` under `[vars]` section
+- After deploy, they appear in **Settings → Variables** (Vars section, not Secrets)
+- You can also edit all 28 params via `/admin` panel at runtime
+
+## Architecture
+
+```
+Browser
+  ├── /                     → Diary frontend (public)
+  ├── /api/chat             → AI chat (public, SSE stream)
+  ├── /api/setup            → Diagnostic info (public)
+  ├── /api/config           → Runtime config (public, read-only)
+  └── /admin                → Admin panel (password protected)
+        ├── /admin/login    → Password page
+        ├── /api/admin/login → Auth endpoint
+        ├── /api/admin/config → GET/PUT config
+        └── /api/admin/reload → Force reload all instances
+```
+
+## File Structure
+
+```
+riddle-web/
+├── src/worker/          ← TypeScript Worker source
+│   ├── index.ts         ← Main entry, routes requests
+│   ├── config.ts        ← All 28 params + env loading
+│   ├── chat.ts          ← AI provider calls + SSE streaming
+│   ├── admin.ts         ← /admin panel (HTML + API)
+│   ├── health.ts        ← Health check
+│   ├── init.ts          ← Client init data
+│   └── types.ts         ← Env type definitions
+├── dist/                ← Frontend (served as static assets)
+│   ├── index.html
+│   ├── app.js
+│   └── styles.css
+├── dist-worker/         ← Built Worker bundle (gitignored, built during deploy)
+│   └── bundle.js
+├── build-worker.js      ← esbuild script
+├── wrangler.toml        ← Cloudflare config
+├── tsconfig.json        ← TypeScript config
+└── package.json         ← Dependencies + scripts
+```

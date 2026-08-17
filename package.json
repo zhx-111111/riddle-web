@@ -1,14 +1,15 @@
 {
   "name": "riddle-web",
-  "version": "3.3.0",
+  "version": "3.7.0",
   "description": "Tom Riddle's diary for the web — faithful port of MaximeRivest/Riddle",
   "scripts": {
-    "build": "npm install",
     "deploy": "wrangler deploy",
-    "deploy:pages": "wrangler pages deploy ./dist --project-name=riddle-web"
+    "dev": "wrangler dev",
+    "build": "node build-worker.js"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
-    "@cloudflare/workers-types": "^0.20240712.0"
+    "@cloudflare/workers-types": "^0.20240712.0",
+    "esbuild": "^0.25.0"
   }
 }
