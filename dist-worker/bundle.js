@@ -27,15 +27,17 @@ var init_types = __esm({
       agnes_keys: { default: "(empty)", desc: "Agnes Intl API keys, comma-separated", group: "Secrets" },
       agnes_cn_keys: { default: "(empty)", desc: "Agnes China API keys, comma-separated", group: "Secrets" },
       zhipu_keys: { default: "(empty)", desc: "Zhipu AI API keys, comma-separated", group: "Secrets" },
-      // ── URLs (optional overrides) ──
-      agnes_base_url: { default: "https://apihub.agnes-ai.com/v1", desc: "Agnes Intl API base URL", group: "URLs" },
-      agnes_cn_base_url: { default: "https://apihub.agnes-ai.cn/v1", desc: "Agnes China API base URL", group: "URLs" },
-      zhipu_base_url: { default: "https://open.bigmodel.cn/api/paas/v4", desc: "Zhipu API base URL", group: "URLs" },
-      // ── Models (optional overrides) ──
+      admin_password: { default: "(empty)", desc: "Admin panel password (protects /admin)", group: "Secrets" },
+      admin_token: { default: "(empty)", desc: "Session signing secret", group: "Secrets" },
+      // ── Models (preset in wrangler.toml) ──
       agnes_model: { default: "agnes-2.5-flash", desc: "Agnes Intl model name", group: "Models" },
       agnes_cn_model: { default: "agnes-2.5-flash", desc: "Agnes China model name", group: "Models" },
       zhipu_model: { default: "glm-4v-flash", desc: "Zhipu model name", group: "Models" },
-      // ── Tuning (optional, hardcoded defaults in config.ts) ──
+      // ── URLs (preset in wrangler.toml) ──
+      agnes_base_url: { default: "https://apihub.agnes-ai.com/v1", desc: "Agnes Intl API base URL", group: "URLs" },
+      agnes_cn_base_url: { default: "https://apihub.agnes-ai.cn/v1", desc: "Agnes China API base URL", group: "URLs" },
+      zhipu_base_url: { default: "https://open.bigmodel.cn/api/paas/v4", desc: "Zhipu API base URL", group: "URLs" },
+      // ── Tuning (hardcoded defaults in config.ts, editable via /admin) ──
       idle_timeout_ms: { default: "1500", desc: "Idle ms before sending", group: "Tuning" },
       min_dist_px: { default: "0.6", desc: "Min sampling distance (px)", group: "Tuning" },
       max_dist_px: { default: "3.0", desc: "Max interpolation distance (px)", group: "Tuning" },
@@ -96,30 +98,46 @@ function clearKvOverrides() {
 function getAllKvOverrides() {
   return Object.fromEntries(kvOverrides.entries());
 }
-function num(env, key, fallback) {
-  const override = kvOverrides.get(key);
+function toSnake(s) {
+  return s.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
+}
+function readRaw(raw, camelName) {
+  const snake = toSnake(camelName);
+  if (raw[snake] !== void 0 && raw[snake] !== "") {
+    return raw[snake];
+  }
+  if (raw[camelName] !== void 0 && raw[camelName] !== "") {
+    return raw[camelName];
+  }
+  return void 0;
+}
+function num(raw, camelName, fallback) {
+  const snakeName = toSnake(camelName);
+  const override = kvOverrides.get(snakeName);
   if (override !== void 0) {
     const p2 = parseFloat(override);
     if (!isNaN(p2)) return p2;
   }
-  const v = env[key];
+  const v = readRaw(raw, camelName);
   if (v === void 0 || v === "" || v === null) return fallback;
   if (typeof v === "number") return v;
   const p = parseFloat(v);
   return isNaN(p) ? fallback : p;
 }
-function str(env, key, fallback) {
-  const override = kvOverrides.get(key);
+function str(raw, camelName, fallback) {
+  const snakeName = toSnake(camelName);
+  const override = kvOverrides.get(snakeName);
   if (override !== void 0) return override;
-  const v = env[key];
+  const v = readRaw(raw, camelName);
   if (v === void 0 || v === "" || v === null) return fallback;
-  return v;
+  return String(v);
 }
-function parseKeys(env, key) {
-  const override = kvOverrides.get(key);
-  const raw = override !== void 0 ? override : env[key];
-  if (!raw) return [];
-  return Array.from(new Set(raw.split(",").map((k) => k.trim()).filter((k) => k.length > 0)));
+function parseKeys(raw, camelName) {
+  const snakeName = toSnake(camelName);
+  const override = kvOverrides.get(snakeName);
+  const raw_val = override !== void 0 ? override : readRaw(raw, camelName);
+  if (!raw_val) return [];
+  return Array.from(new Set(String(raw_val).split(",").map((k) => k.trim()).filter((k) => k.length > 0)));
 }
 function buildEnv(raw) {
   return {
@@ -195,13 +213,47 @@ function buildBackendConfig(env) {
 }
 function handleConfigRequest(env) {
   const groups = {};
+  const currentValues = {
+    "agnes_keys": env.agnesKeys.join(","),
+    "agnes_cn_keys": env.agnesCnKeys.join(","),
+    "zhipu_keys": env.zhipuKeys.join(","),
+    "admin_password": env.adminPassword,
+    "admin_token": env.adminToken,
+    "agnes_base_url": env.agnesBaseUrl,
+    "agnes_cn_base_url": env.agnesCnBaseUrl,
+    "zhipu_base_url": env.zhipuBaseUrl,
+    "agnes_model": env.agnesModel,
+    "agnes_cn_model": env.agnesCnModel,
+    "zhipu_model": env.zhipuModel,
+    "idle_timeout_ms": env.idleTimeoutMs,
+    "min_dist_px": env.minDistPx,
+    "max_dist_px": env.maxDistPx,
+    "pressure_min_px": env.pressureMinPx,
+    "pressure_max_px": env.pressureMaxPx,
+    "poll_interval_ms": env.pollIntervalMs,
+    "stroke_interval_ms": env.strokeIntervalMs,
+    "stroke_max_dur_ms": env.strokeMaxDurMs,
+    "svg_stroke_width": env.svgStrokeWidth,
+    "max_lines": env.maxLines,
+    "line_height_px": env.lineHeightPx,
+    "margin_top_px": env.marginTopPx,
+    "margin_x_px": env.marginXPx,
+    "font_size_px": env.fontSizePx,
+    "reply_fade_delay_ms": env.replyFadeDelayMs,
+    "fade_duration_ms": env.fadeDurationMs,
+    "history_ttl_sec": env.historyTtlSec,
+    "max_history_turns": env.maxHistoryTurns,
+    "max_retries": env.maxRetries,
+    "request_timeout_ms": env.requestTimeoutMs,
+    "max_tokens": env.maxTokens,
+    "temperature": env.temperature
+  };
   for (const [varName, info] of Object.entries(VAR_DOCS)) {
     const override = kvOverrides.get(varName);
-    const fromEnv = env[varName];
-    const current = override !== void 0 ? override : fromEnv !== void 0 && fromEnv !== "" ? fromEnv : info.default;
-    const source = override !== void 0 ? "kv" : fromEnv !== void 0 && fromEnv !== "" ? "env" : "default";
+    const current = override !== void 0 ? override : currentValues[varName];
     const isSecret = varName.includes("keys") || varName.includes("password") || varName.includes("token");
-    const displayValue = isSecret && current && String(current).length > 8 ? String(current).substring(0, 4) + "\u2022".repeat(Math.max(0, String(current).length - 8)) + String(current).substring(String(current).length - 4) : current;
+    const displayValue = isSecret && current && String(current).length > 8 ? String(current).substring(0, 4) + "\u2022".repeat(Math.max(0, String(current).length - 8)) + String(current).substring(String(current).length - 4) : current ?? info.default;
+    const source = override !== void 0 ? "kv" : current !== void 0 && current !== "" && current !== info.default ? "env" : "default";
     const entry = {
       var: varName,
       default: info.default,
@@ -215,8 +267,9 @@ function handleConfigRequest(env) {
   }
   const response = {
     status: "ok",
-    secrets_needed: ["agnes_keys", "agnes_cn_keys (optional)", "zhipu_keys (recommended)"],
-    vars_optional: "All other vars have hardcoded defaults in src/worker/config.ts.",
+    secrets_needed: ["agnes_keys", "agnes_cn_keys (optional)", "zhipu_keys (recommended)", "admin_password", "admin_token"],
+    vars_preset_in_wrangler: ["agnesModel", "agnesCnModel", "zhipuModel", "agnesBaseUrl", "agnesCnBaseUrl", "zhipuBaseUrl", "adminPassword", "adminToken"],
+    note: "Other vars use hardcoded defaults in config.ts. All 28 params editable via /admin panel.",
     runtime: buildRuntimeConfig(env),
     groups
   };
@@ -921,6 +974,9 @@ function getCookie(request, name) {
 }
 
 // src/worker/admin.ts
+function toCamel(s) {
+  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
 var KV_PREFIX = "admin:config:";
 async function kvGetAll(kv) {
   try {
@@ -928,9 +984,7 @@ async function kvGetAll(kv) {
     const result = {};
     for (const key of list.keys) {
       const val = await kv.get(key.name);
-      if (val) {
-        result[key.name.replace(KV_PREFIX, "")] = val;
-      }
+      if (val) result[key.name.replace(KV_PREFIX, "")] = val;
     }
     return result;
   } catch {
@@ -957,228 +1011,768 @@ function makeSessionToken(secret) {
     return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
   });
 }
-var LOGIN_HTML = [
-  "<!DOCTYPE html>",
-  '<html lang="zh-CN">',
-  "<head>",
-  '<meta charset="UTF-8">',
-  '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">',
-  "<title>\u65E5\u8BB0\u7BA1\u7406\u540E\u53F0 \u2014 \u767B\u5F55</title>",
-  "<style>",
-  "*{margin:0;padding:0;box-sizing:border-box}",
-  'body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#0a0a0f;color:#e0e0e0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}',
-  ".login-box{background:#15151e;border:1px solid #2a2a3e;border-radius:12px;padding:40px 32px;width:100%;max-width:380px;text-align:center}",
-  ".login-box h1{font-size:22px;margin-bottom:8px;color:#fff}",
-  ".login-box p{font-size:13px;color:#888;margin-bottom:24px}",
-  ".login-box input{width:100%;padding:12px 16px;border-radius:8px;border:1px solid #2a2a3e;background:#0f0f18;color:#fff;font-size:16px;margin-bottom:16px;outline:none;transition:border-color .2s}",
-  ".login-box input:focus{border-color:#6366f1}",
-  ".login-box button{width:100%;padding:12px;border-radius:8px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:16px;font-weight:600;cursor:pointer;transition:opacity .2s}",
-  ".login-box button:hover{opacity:.9}",
-  ".login-box .error{color:#ef4444;font-size:13px;margin-top:12px;min-height:18px}",
-  ".lockout{color:#f59e0b;font-size:13px;margin-top:12px}",
-  "</style></head><body>",
-  '<div class="login-box">',
-  "<h1>\u{1F9D9} \u65E5\u8BB0\u7BA1\u7406\u540E\u53F0</h1>",
-  "<p>\u8BF7\u8F93\u5165\u7BA1\u7406\u5458\u5BC6\u7801</p>",
-  '<form id="loginForm" method="POST" action="/api/admin/login">',
-  '<input type="password" name="password" id="pw" placeholder="\u7BA1\u7406\u5458\u5BC6\u7801" autofocus autocomplete="off">',
-  '<button type="submit">\u767B \u5F55</button>',
-  "</form>",
-  '<div class="error" id="err"></div>',
-  '<div class="lockout" id="lockout"></div>',
-  "</div>",
-  "<script>",
-  'const errEl=document.getElementById("err");',
-  'const lockEl=document.getElementById("lockout");',
-  'const form=document.getElementById("loginForm");',
-  "const params=new URLSearchParams(location.search);",
-  'if(params.get("error")==="invalid")errEl.textContent="\u5BC6\u7801\u9519\u8BEF\uFF0C\u8BF7\u91CD\u8BD5";',
-  'if(params.get("error")==="locked")lockEl.textContent="\u5C1D\u8BD5\u6B21\u6570\u8FC7\u591A\uFF0C\u8BF75\u5206\u949F\u540E\u518D\u8BD5";',
-  'if(params.get("error")==="expired")errEl.textContent="\u4F1A\u8BDD\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55";',
-  'form.addEventListener("submit",async(e)=>{',
-  "  e.preventDefault();",
-  '  const pw=document.getElementById("pw").value;',
-  '  if(!pw){errEl.textContent="\u8BF7\u8F93\u5165\u5BC6\u7801";return;}',
-  '  const fd=new FormData();fd.set("password",pw);',
-  "  try{",
-  '    const res=await fetch("/api/admin/login",{method:"POST",body:fd,redirect:"manual"});',
-  '    if(res.status===302||res.status===0){const loc=res.headers.get("Location")||"/admin";location.href=loc;}',
-  '    else if(res.status===401){const d=await res.json().catch(()=>({}));errEl.textContent=d.message||"\u767B\u5F55\u5931\u8D25";}',
-  '    else{location.href="/admin";}',
-  "  }catch(e){form.submit();}",
-  "});",
-  "<\/script>",
-  "</body></html>"
-].join("\n");
-var ADMIN_HTML = [
-  "<!DOCTYPE html>",
-  '<html lang="zh-CN">',
-  "<head>",
-  '<meta charset="UTF-8">',
-  '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">',
-  "<title>\u65E5\u8BB0\u7BA1\u7406\u540E\u53F0</title>",
-  "<style>",
-  "*{margin:0;padding:0;box-sizing:border-box}",
-  ":root{--bg:#0a0a0f;--panel:#15151e;--border:#2a2a3e;--text:#e0e0e0;--muted:#888;--accent:#6366f1;--green:#10b981;--red:#ef4444;--yellow:#f59e0b}",
-  'body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px;max-width:800px;margin:0 auto}',
-  "header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--border)}",
-  "header h1{font-size:20px;color:#fff}header h1 span{color:var(--accent)}",
-  ".header-actions{display:flex;gap:8px}",
-  ".btn{padding:8px 14px;border-radius:6px;border:none;font-size:13px;cursor:pointer;font-weight:500;transition:opacity .2s}",
-  ".btn-primary{background:var(--accent);color:#fff}",
-  ".btn-primary:hover{opacity:.9}",
-  ".btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}",
-  ".btn-ghost:hover{color:var(--text)}",
-  ".btn-danger{background:transparent;color:var(--red);border:1px solid var(--red)}",
-  ".btn-danger:hover{background:rgba(239,68,68,.1)}",
-  ".group{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}",
-  ".group h2{font-size:14px;color:var(--muted);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border)}",
-  ".field{margin-bottom:14px}",
-  ".field:last-child{margin-bottom:0}",
-  ".field label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}",
-  ".field label .var-name{color:var(--accent);font-family:monospace;font-size:12px}",
-  ".field label .default-val{color:#555;font-size:11px;margin-left:6px}",
-  ".field input{width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--border);background:#0f0f18;color:var(--text);font-size:14px;font-family:monospace;outline:none;transition:border-color .2s}",
-  ".field input:focus{border-color:var(--accent)}",
-  ".field .desc{font-size:11px;color:#666;margin-top:3px;line-height:1.5}",
-  ".status-bar{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:12px;font-size:13px;z-index:100}",
-  ".status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}",
-  ".status-dot.saving{background:var(--yellow)}",
-  ".status-dot.saved{background:var(--green)}",
-  ".status-dot.error{background:var(--red)}",
-  ".status-bar .spacer{flex:1}",
-  ".toggle-secret{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:4px}",
-  ".toggle-secret:hover{color:var(--text)}",
-  ".badge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600}",
-  ".badge-secret{background:rgba(239,68,68,.15);color:var(--red)}",
-  ".badge-kv{background:rgba(16,185,129,.15);color:var(--green)}",
-  ".badge-default{background:rgba(136,136,136,.15);color:var(--muted)}",
-  "@media(max-width:600px){body{padding:12px}.group{padding:14px}header h1{font-size:17px}}",
-  "</style></head><body>",
-  "<header>",
-  "<h1><span>\u{1F9D9} \u6C64\u59C6\xB7\u91CC\u5FB7\u5C14\u7684\u65E5\u8BB0</span> \xB7 \u7BA1\u7406\u540E\u53F0</h1>",
-  '<div class="header-actions">',
-  '<button class="btn btn-ghost" id="reloadBtn" title="\u91CD\u8F7D\u6240\u6709 Worker \u5B9E\u4F8B">\u{1F504} \u91CD\u8F7D</button>',
-  '<button class="btn btn-danger" id="logoutBtn">\u9000\u51FA\u767B\u5F55</button>',
-  "</div></header>",
-  '<div id="content">\u52A0\u8F7D\u4E2D\u2026</div>',
-  '<div class="status-bar">',
-  '<div class="status-dot" id="statusDot"></div>',
-  '<span id="statusText">\u5C31\u7EEA</span>',
-  '<span class="spacer"></span>',
-  '<button class="btn btn-primary" id="saveBtn">\u{1F4BE} \u4FDD\u5B58\u4FEE\u6539</button>',
-  "</div>",
-  "<script>",
-  "const GROUPS=[",
-  '  {key:"secrets",label:"\u{1F511} API \u5BC6\u94A5\uFF08\u52A0\u5BC6\u5B58\u50A8\uFF09",fields:[',
-  '    {name:"agnes_keys",desc:"Agnes \u56FD\u9645\u7AD9 API \u5BC6\u94A5\uFF0C\u591A\u4E2A\u7528\u9017\u53F7\u5206\u9694",secret:true},',
-  '    {name:"agnes_cn_keys",desc:"Agnes \u56FD\u5185\u7AD9 API \u5BC6\u94A5\uFF0C\u591A\u4E2A\u7528\u9017\u53F7\u5206\u9694\uFF08\u53EF\u9009\uFF09",secret:true},',
-  '    {name:"zhipu_keys",desc:"\u667A\u8C31 AI API \u5BC6\u94A5\uFF0C\u591A\u4E2A\u7528\u9017\u53F7\u5206\u9694\uFF08\u63A8\u8350\u514D\u8D39\u515C\u5E95\uFF09",secret:true},',
-  '    {name:"admin_password",desc:"\u7BA1\u7406\u540E\u53F0\u767B\u5F55\u5BC6\u7801\uFF08\u7528\u4E8E\u8BBF\u95EE /admin\uFF09",secret:true},',
-  '    {name:"admin_token",desc:"\u4F1A\u8BDD\u7B7E\u540D\u5BC6\u94A5\uFF08\u4EFB\u610F\u968F\u673A\u5B57\u7B26\u4E32\uFF09",secret:true}',
-  "  ]},",
-  '  {key:"models",label:"\u{1F916} \u6A21\u578B\u4E0E\u63A5\u53E3\u5730\u5740",fields:[',
-  '    {name:"agnes_model",desc:"Agnes \u56FD\u9645\u7AD9\u6A21\u578B\u540D\u79F0"},',
-  '    {name:"agnes_cn_model",desc:"Agnes \u56FD\u5185\u7AD9\u6A21\u578B\u540D\u79F0"},',
-  '    {name:"zhipu_model",desc:"\u667A\u8C31\u6A21\u578B\u540D\u79F0"},',
-  '    {name:"agnes_base_url",desc:"Agnes \u56FD\u9645\u7AD9 API \u5730\u5740"},',
-  '    {name:"agnes_cn_base_url",desc:"Agnes \u56FD\u5185\u7AD9 API \u5730\u5740"},',
-  '    {name:"zhipu_base_url",desc:"\u667A\u8C31 API \u5730\u5740"}',
-  "  ]},",
-  '  {key:"timing",label:"\u23F1\uFE0F \u65F6\u5E8F\u53C2\u6570",fields:[',
-  '    {name:"idle_timeout_ms",desc:"\u505C\u7B14\u591A\u4E45\u540E\u53D1\u9001\u8BF7\u6C42\uFF08\u6BEB\u79D2\uFF09",num:true},',
-  '    {name:"poll_interval_ms",desc:"\u9010\u5B57\u663E\u73B0\u95F4\u9694\u65F6\u95F4\uFF08\u6BEB\u79D2\uFF09",num:true},',
-  '    {name:"stroke_interval_ms",desc:"\u6BCF\u7B14\u52A8\u753B\u6301\u7EED\u65F6\u95F4\uFF08\u6BEB\u79D2\uFF09",num:true},',
-  '    {name:"stroke_max_dur_ms",desc:"\u5355\u7B14\u6700\u5927\u52A8\u753B\u65F6\u957F\uFF08\u6BEB\u79D2\uFF09",num:true},',
-  '    {name:"reply_fade_delay_ms",desc:"\u56DE\u590D\u663E\u793A\u591A\u4E45\u540E\u5F00\u59CB\u6D88\u5931\uFF08\u6BEB\u79D2\uFF09",num:true},',
-  '    {name:"fade_duration_ms",desc:"\u6D88\u6563\u52A8\u753B\u65F6\u957F\uFF08\u6BEB\u79D2\uFF09",num:true},',
-  '    {name:"request_timeout_ms",desc:"\u5355\u6B21 API \u8BF7\u6C42\u8D85\u65F6\uFF08\u6BEB\u79D2\uFF09",num:true}',
-  "  ]},",
-  '  {key:"ink",label:"\u{1F58C}\uFE0F \u7B14\u8FF9\u4E0E\u663E\u793A",fields:[',
-  '    {name:"pressure_min_px",desc:"\u6700\u5C0F\u7B14\u8FF9\u5BBD\u5EA6\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"pressure_max_px",desc:"\u6700\u5927\u7B14\u8FF9\u5BBD\u5EA6\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"min_dist_px",desc:"\u6700\u5C0F\u91C7\u6837\u8DDD\u79BB\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"max_dist_px",desc:"\u6700\u5927\u63D2\u503C\u8DDD\u79BB\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"svg_stroke_width",desc:"SVG \u8DEF\u5F84\u63CF\u8FB9\u5BBD\u5EA6\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"line_height_px",desc:"\u884C\u9AD8\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"margin_top_px",desc:"\u56DE\u590D\u9876\u90E8\u8FB9\u8DDD\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"margin_x_px",desc:"\u56DE\u590D\u5DE6\u4FA7\u8FB9\u8DDD\uFF08\u50CF\u7D20\uFF09",num:true},',
-  '    {name:"font_size_px",desc:"\u57FA\u7840\u5B57\u53F7\uFF08\u50CF\u7D20\uFF09",num:true}',
-  "  ]},",
-  '  {key:"memory",label:"\u{1F9E0} \u8BB0\u5FC6\u4E0E\u540E\u7AEF",fields:[',
-  '    {name:"max_history_turns",desc:"\u6700\u5927\u5BF9\u8BDD\u5386\u53F2\u8F6E\u6570",num:true},',
-  '    {name:"max_retries",desc:"API \u6700\u5927\u91CD\u8BD5\u6B21\u6570",num:true},',
-  '    {name:"max_tokens",desc:"\u6A21\u578B\u6700\u5927\u8F93\u51FA token \u6570",num:true},',
-  '    {name:"temperature",desc:"\u91C7\u6837\u6E29\u5EA6\uFF080-2\uFF0C\u8D8A\u5927\u8D8A\u53D1\u6563\uFF09",num:true},',
-  '    {name:"history_ttl_sec",desc:"KV \u8BB0\u5FC6\u8FC7\u671F\u65F6\u95F4\uFF08\u79D2\uFF09",num:true}',
-  "  ]}",
-  "];",
-  "let configData={};",
-  "let dirtyFields=new Set();",
-  "async function loadConfig(){",
-  '  const res=await fetch("/api/admin/config",{credentials:"include"});',
-  '  if(res.status===401){location.href="/admin/login";return;}',
-  "  configData=await res.json();",
-  "  render();",
-  "}",
-  `function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}[c]));}`,
-  "function setStatus(state,text){",
-  '  const dot=document.getElementById("statusDot");',
-  '  const txt=document.getElementById("statusText");',
-  '  dot.className="status-dot "+state;txt.textContent=text;',
-  "}",
-  "function render(){",
-  '  const root=document.getElementById("content");',
-  '  let html="";',
-  "  for(const group of GROUPS){",
-  `    html+='<div class="group"><h2>'+group.label+'</h2>';`,
-  "    for(const f of group.fields){",
-  "      const entry=(configData.config&&configData.config[f.name])||{};",
-  '      const val=entry.current||"";',
-  '      const def=entry.default||"";',
-  '      const source=entry.source||"default";',
-  '      const badge=source==="kv"?"<span class=\\"badge badge-kv\\">\u5DF2\u5B58</span>":source==="secret"?"<span class=\\"badge badge-secret\\">\u5BC6\u94A5</span>":"<span class=\\"badge badge-default\\">\u9ED8\u8BA4</span>";',
-  '      const inputType=f.secret?"password":(f.num?"number":"text");',
-  `      html+='<div class="field"><label>'+badge+' <code>'+f.name+'</code><span class="default-val">\u9ED8\u8BA4: '+def+'</span></label><input type="'+inputType+'" id="f_'+f.name+'" value="'+escapeHtml(val)+'" data-name="'+f.name+'" data-secret="'+f.secret+'" placeholder="'+escapeHtml(def)+'"><div class="desc">'+f.desc+'</div></div>';`,
-  "    }",
-  '    html+="</div>";',
-  "  }",
-  "  root.innerHTML=html;",
-  '  root.querySelectorAll("input").forEach(input=>{',
-  '    input.addEventListener("input",()=>{dirtyFields.add(input.dataset.name);setStatus("dirty","\u6709\u672A\u4FDD\u5B58\u7684\u4FEE\u6539\u2026");});',
-  '    input.addEventListener("dblclick",()=>{if(input.dataset.secret==="true")input.type=input.type==="password"?"text":"password";});',
-  "  });",
-  "}",
-  'document.getElementById("saveBtn").addEventListener("click",async()=>{',
-  "  const updates={};",
-  '  dirtyFields.forEach(name=>{const el=document.getElementById("f_"+name);if(el)updates[name]=el.value;});',
-  '  if(Object.keys(updates).length===0){setStatus("saved","\u6CA1\u6709\u9700\u8981\u4FDD\u5B58\u7684\u4FEE\u6539");return;}',
-  '  setStatus("saving","\u4FDD\u5B58\u4E2D\u2026");',
-  "  try{",
-  '    const res=await fetch("/api/admin/config",{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(updates)});',
-  '    if(res.status===401){location.href="/admin/login";return;}',
-  "    const data=await res.json();",
-  '    if(data.success){setStatus("saved","\u2705 \u5DF2\u4FDD\u5B58 "+data.saved+" \u9879\uFF0C\u6B63\u5728\u91CD\u8F7D\u2026");dirtyFields.clear();await loadConfig();setTimeout(()=>setStatus("saved","\u2705 \u6240\u6709\u4FEE\u6539\u5DF2\u751F\u6548"),1500);}',
-  '    else{setStatus("error",data.message||"\u4FDD\u5B58\u5931\u8D25");}',
-  '  }catch(e){setStatus("error","\u7F51\u7EDC\u9519\u8BEF: "+e.message);}',
-  "});",
-  'document.getElementById("reloadBtn").addEventListener("click",async()=>{',
-  '  setStatus("saving","\u6B63\u5728\u91CD\u8F7D\u6240\u6709\u5B9E\u4F8B\u2026");',
-  "  try{",
-  '    const res=await fetch("/api/admin/reload",{method:"POST",credentials:"include"});',
-  '    if(res.status===401){location.href="/admin/login";return;}',
-  "    const data=await res.json();",
-  '    setStatus("saved","\u2705 "+data.message||"\u91CD\u8F7D\u5B8C\u6210");',
-  '  }catch(e){setStatus("error","\u91CD\u8F7D\u5931\u8D25: "+e.message);}',
-  "});",
-  'document.getElementById("logoutBtn").addEventListener("click",async()=>{',
-  '  await fetch("/api/admin/logout",{method:"POST",credentials:"include"});',
-  '  location.href="/admin/login";',
-  "});",
-  "loadConfig();",
-  "<\/script>",
-  "</body></html>"
-].join("\n");
+var LOGIN_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Tom Riddle's Diary \u2014 Admin</title>
+<style>
+  :root {
+    --bg: #000000;
+    --surface: rgba(28,28,30,0.85);
+    --surface-hover: rgba(40,40,45,0.9);
+    --border: rgba(255,255,255,0.08);
+    --text: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --danger: #ff453a;
+    --warning: #ff9f0a;
+    --success: #30d158;
+    --danger-bg: rgba(255,69,58,0.12);
+    --danger-border: rgba(255,69,58,0.3);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:var(--font);
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+    display:flex;align-items:center;justify-content:center;
+    padding:20px;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  /* Animated background */
+  body::before{
+    content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
+    background:radial-gradient(ellipse at 30% 20%,rgba(10,132,255,0.08) 0%,transparent 50%),
+               radial-gradient(ellipse at 70% 80%,rgba(120,80,255,0.06) 0%,transparent 50%);
+    animation:drift 20s ease-in-out infinite alternate;z-index:0;
+  }
+  @keyframes drift{0%{transform:translate(0,0)}100%{transform:translate(-3%,2%)}}
+  .login-container{
+    position:relative;z-index:1;
+    width:100%;max-width:400px;
+    background:var(--surface);
+    backdrop-filter:blur(40px) saturate(180%);
+    -webkit-backdrop-filter:blur(40px) saturate(180%);
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:48px 36px 36px;
+    text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+    animation:fadeUp .6s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  .login-icon{
+    width:64px;height:64px;border-radius:16px;
+    background:linear-gradient(135deg,#1c1c2e,#0d0d1a);
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 20px;
+    border:1px solid rgba(255,255,255,0.06);
+  }
+  .login-icon svg{width:32px;height:32px}
+  .login-container h1{
+    font-size:24px;font-weight:700;
+    letter-spacing:-0.5px;margin-bottom:6px;
+  }
+  .login-container .subtitle{
+    font-size:14px;color:var(--text-secondary);
+    margin-bottom:32px;line-height:1.5;
+  }
+  .input-group{margin-bottom:14px;text-align:left}
+  .input-group label{
+    display:block;font-size:12px;font-weight:500;
+    color:var(--text-secondary);margin-bottom:6px;
+    padding-left:4px;
+  }
+  .input-group input{
+    width:100%;padding:14px 16px;
+    background:rgba(0,0,0,0.3);
+    border:1px solid var(--border);
+    border-radius:12px;
+    color:var(--text);font-size:16px;
+    font-family:var(--font);
+    outline:none;
+    transition:border-color .25s,box-shadow .25s,background .25s;
+  }
+  .input-group input:focus{
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(10,132,255,0.15);
+    background:rgba(0,0,0,0.5);
+  }
+  .input-group input::placeholder{color:#555}
+  .btn-primary{
+    width:100%;padding:14px;
+    border:none;border-radius:12px;
+    background:var(--accent);color:#fff;
+    font-size:16px;font-weight:600;
+    font-family:var(--font);
+    cursor:pointer;
+    transition:background .2s,transform .1s;
+    margin-top:8px;
+  }
+  .btn-primary:hover{background:var(--accent-hover)}
+  .btn-primary:active{transform:scale(0.98)}
+  .btn-primary:disabled{opacity:0.5;cursor:not-allowed}
+  .error-box{
+    margin-top:16px;padding:10px 14px;
+    background:var(--danger-bg);
+    border:1px solid var(--danger-border);
+    border-radius:10px;
+    color:var(--danger);font-size:13px;
+    display:none;animation:shake .4s;
+  }
+  .error-box.show{display:block}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .lockout-box{
+    margin-top:12px;padding:10px 14px;
+    background:rgba(255,159,10,0.1);
+    border:1px solid rgba(255,159,10,0.25);
+    border-radius:10px;
+    color:var(--warning);font-size:13px;
+    display:none;
+  }
+  .lockout-box.show{display:block}
+  .footer-hint{
+    margin-top:28px;font-size:11px;
+    color:#444;text-align:center;
+  }
+</style></head><body>
+<div class="login-container">
+  <div class="login-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="1.5">
+      <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" stroke-linejoin="round"/>
+      <path d="M12 22V12M12 12L3 7M12 12l9-5" stroke-linejoin="round"/>
+    </svg>
+  </div>
+  <h1>\u7BA1\u7406\u5458\u9A8C\u8BC1</h1>
+  <p class="subtitle">Tom Riddle's Diary<br>\u8BF7\u8F93\u5165\u7BA1\u7406\u5BC6\u7801\u4EE5\u7EE7\u7EED</p>
+  <form id="loginForm" novalidate>
+    <div class="input-group">
+      <label for="pw">\u7BA1\u7406\u5BC6\u7801</label>
+      <input type="password" id="pw" placeholder="Enter admin password" autofocus autocomplete="off" spellcheck="false">
+    </div>
+    <button type="submit" class="btn-primary" id="submitBtn">\u767B \u5F55</button>
+  </form>
+  <div class="error-box" id="err"></div>
+  <div class="lockout-box" id="lockout"></div>
+  <p class="footer-hint">\u{1F512} \u4F1A\u8BDD\u52A0\u5BC6 \xB7 SHA-256 \u8BA4\u8BC1</p>
+</div>
+<script>
+const errEl=document.getElementById("err");
+const lockEl=document.getElementById("lockout");
+const form=document.getElementById("loginForm");
+const submitBtn=document.getElementById("submitBtn");
+const params=new URLSearchParams(location.search);
+function showError(msg){errEl.textContent=msg;errEl.classList.add("show");lockEl.classList.remove("show");}
+function showLock(msg){lockEl.textContent=msg;lockEl.classList.add("show");errEl.classList.remove("show");}
+if(params.get("error")==="invalid")showError("\u5BC6\u7801\u9519\u8BEF\uFF0C\u8BF7\u91CD\u8BD5");
+if(params.get("error")==="locked")showLock("\u5C1D\u8BD5\u6B21\u6570\u8FC7\u591A\uFF0C\u8BF7 5 \u5206\u949F\u540E\u518D\u8BD5");
+if(params.get("error")==="expired")showError("\u4F1A\u8BDD\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+form.addEventListener("submit",async(e)=>{
+  e.preventDefault();
+  const pw=document.getElementById("pw").value.trim();
+  if(!pw){showError("\u8BF7\u8F93\u5165\u5BC6\u7801");return;}
+  submitBtn.disabled=true;submitBtn.textContent="\u9A8C\u8BC1\u4E2D\u2026";
+  try{
+    const fd=new FormData();fd.set("password",pw);
+    const res=await fetch("/api/admin/login",{method:"POST",body:fd,redirect:"manual"});
+    if(res.status===302||res.status===0){
+      const loc=res.headers.get("Location")||"/admin";
+      location.href=loc;
+    }else if(res.status===401){
+      const d=await res.json().catch(()=>({}));
+      if(d.message&&d.message.includes("\u8FC7\u591A"))showLock(d.message);
+      else showError(d.message||"\u767B\u5F55\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u5BC6\u7801");
+      submitBtn.disabled=false;submitBtn.textContent="\u767B \u5F55";
+    }else{
+      location.href="/admin";
+    }
+  }catch(e){
+    showError("\u7F51\u7EDC\u9519\u8BEF\uFF0C\u8BF7\u91CD\u8BD5");
+    submitBtn.disabled=false;submitBtn.textContent="\u767B \u5F55";
+  }
+});
+// Enter key
+document.getElementById("pw").addEventListener("keydown",(e)=>{if(e.key==="Enter")form.requestSubmit();});
+<\/script>
+</body></html>`;
+var ADMIN_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Admin \u2014 Tom Riddle's Diary</title>
+<style>
+:root{
+  --bg:#000;--surface:rgba(28,28,30,0.7);--surface-2:rgba(40,40,45,0.5);
+  --border:rgba(255,255,255,0.08);--border-strong:rgba(255,255,255,0.15);
+  --text:#f5f5f7;--text-2:#a1a1a6;--text-3:#6e6e73;
+  --accent:#0a84ff;--accent-2:#409cff;--accent-bg:rgba(10,132,255,0.12);
+  --green:#30d158;--green-bg:rgba(48,209,88,0.12);
+  --red:#ff453a;--red-bg:rgba(255,69,58,0.12);
+  --yellow:#ff9f0a;--yellow-bg:rgba(255,159,10,0.12);
+  --purple:#bf5af2;--purple-bg:rgba(191,90,242,0.12);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,sans-serif;
+  --radius:14px;--radius-lg:20px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);-webkit-font-smoothing:antialiased}
+body{
+  min-height:100vh;padding-bottom:90px;
+  background:
+    radial-gradient(ellipse 800px 600px at 10% 0%,rgba(10,132,255,0.06),transparent),
+    radial-gradient(ellipse 600px 400px at 90% 100%,rgba(191,90,242,0.04),transparent),
+    var(--bg);
+}
+/* \u2500\u2500 Header \u2500\u2500 */
+header{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;
+  background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(40px) saturate(180%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);
+  border-bottom:1px solid var(--border);
+}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-icon{
+  width:32px;height:32px;border-radius:8px;
+  background:linear-gradient(135deg,#1c1c2e,#0d0d1a);
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--border);
+}
+.brand-icon svg{width:18px;height:18px}
+.brand h1{font-size:16px;font-weight:700;letter-spacing:-0.3px}
+.brand h1 span{color:var(--purple);font-weight:500}
+.header-actions{display:flex;gap:8px}
+.btn{
+  padding:8px 14px;border-radius:10px;border:none;
+  font-size:13px;font-weight:500;cursor:pointer;
+  font-family:var(--font);transition:all .2s;
+}
+.btn-ghost{background:var(--surface-2);color:var(--text-2);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--border-strong)}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,58,0.2)}
+.btn-danger:hover{background:rgba(255,69,58,0.2)}
+.btn-primary{background:var(--accent);color:#fff;font-weight:600;padding:9px 20px}
+.btn-primary:hover{background:var(--accent-2)}
+.btn-primary:disabled{opacity:0.5;cursor:not-allowed}
+
+/* \u2500\u2500 Layout \u2500\u2500 */
+main{max-width:820px;margin:0 auto;padding:20px}
+.group{
+  background:var(--surface);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  margin-bottom:16px;overflow:hidden;
+  animation:fadeUp .5s cubic-bezier(0.16,1,0.3,1) both;
+}
+.group:nth-child(1){animation-delay:0s}
+.group:nth-child(2){animation-delay:.05s}
+.group:nth-child(3){animation-delay:.1s}
+.group:nth-child(4){animation-delay:.15s}
+.group:nth-child(5){animation-delay:.2s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+.group-header{
+  display:flex;align-items:center;gap:10px;
+  padding:16px 20px;
+  border-bottom:1px solid var(--border);
+  background:rgba(255,255,255,0.02);
+}
+.group-header .icon{
+  width:28px;height:28px;border-radius:7px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;
+}
+.group-header h2{font-size:14px;font-weight:600;color:var(--text-2);letter-spacing:0.2px}
+.group-header .count{
+  margin-left:auto;font-size:11px;color:var(--text-3);
+  background:var(--surface-2);padding:2px 8px;border-radius:10px;
+}
+
+/* \u2500\u2500 Fields \u2500\u2500 */
+.field{
+  padding:14px 20px;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  transition:background .2s;
+}
+.field:last-child{border-bottom:none}
+.field:hover{background:rgba(255,255,255,0.02)}
+.field-label{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:6px;
+}
+.field-label code{
+  font-family:"SF Mono",Menlo,Consolas,monospace;
+  font-size:12px;color:var(--accent);
+  background:var(--accent-bg);
+  padding:2px 7px;border-radius:5px;
+  font-weight:500;
+}
+.field-label .badge{
+  font-size:10px;font-weight:600;
+  padding:2px 7px;border-radius:5px;
+  text-transform:uppercase;letter-spacing:0.3px;
+}
+.badge-kv{background:var(--green-bg);color:var(--green)}
+.badge-env{background:var(--accent-bg);color:var(--accent)}
+.badge-default{background:var(--surface-2);color:var(--text-3)}
+.badge-secret{background:var(--red-bg);color:var(--red)}
+.field-input-wrap{position:relative;display:flex;align-items:center;gap:8px}
+.field-input-wrap input{
+  flex:1;padding:10px 14px;
+  background:rgba(0,0,0,0.35);
+  border:1px solid var(--border);
+  border-radius:10px;
+  color:var(--text);font-size:14px;
+  font-family:"SF Mono",Menlo,Consolas,monospace;
+  outline:none;
+  transition:border-color .25s,box-shadow .25s;
+}
+.field-input-wrap input:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(10,132,255,0.12);
+}
+.field-input-wrap input::placeholder{color:#444;font-family:var(--font);font-size:13px}
+.toggle-visibility{
+  flex-shrink:0;
+  width:36px;height:36px;border-radius:8px;
+  background:var(--surface-2);border:1px solid var(--border);
+  color:var(--text-2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.toggle-visibility:hover{color:var(--text);border-color:var(--border-strong)}
+.toggle-visibility svg{width:16px;height:16px}
+.field-desc{font-size:12px;color:var(--text-3);margin-top:5px;line-height:1.5}
+.field-desc .default-val{color:var(--text-2)}
+.field.modified{background:rgba(10,132,255,0.04)}
+.field.modified .field-label code{color:var(--yellow)}
+.field.modified .badge{background:var(--yellow-bg);color:var(--yellow)}
+
+/* \u2500\u2500 Save Bar \u2500\u2500 */
+.save-bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;gap:12px;
+  padding:12px 20px;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom));
+  background:rgba(0,0,0,0.85);
+  backdrop-filter:blur(40px) saturate(180%);
+  -webkit-backdrop-filter:blur(40px) saturate(180%);
+  border-top:1px solid var(--border);
+  transform:translateY(100%);
+  transition:transform .35s cubic-bezier(0.16,1,0.3,1);
+}
+.save-bar.show{transform:translateY(0)}
+.save-bar .status-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--text-3);flex-shrink:0;
+  transition:background .3s;
+}
+.save-bar .status-dot.saving{background:var(--yellow);animation:pulse 1s infinite}
+.save-bar .status-dot.saved{background:var(--green)}
+.save-bar .status-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.save-bar .status-text{flex:1;font-size:13px;color:var(--text-2)}
+.save-bar .dirty-count{
+  font-size:11px;color:var(--yellow);
+  background:var(--yellow-bg);padding:2px 8px;border-radius:10px;
+  margin-right:8px;display:none;
+}
+.save-bar .dirty-count.show{display:inline}
+
+/* \u2500\u2500 Toast \u2500\u2500 */
+.toast{
+  position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-80px);
+  padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;
+  z-index:200;opacity:0;transition:all .35s cubic-bezier(0.16,1,0.3,1);
+  pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.success{background:var(--green-bg);color:var(--green);border:1px solid rgba(48,209,88,0.3)}
+.toast.error{background:var(--red-bg);color:var(--red);border:1px solid rgba(255,69,58,0.3)}
+.toast.info{background:var(--accent-bg);color:var(--accent);border:1px solid rgba(10,132,255,0.3)}
+
+/* \u2500\u2500 Responsive \u2500\u2500 */
+@media(max-width:600px){
+  main{padding:12px}
+  .group{border-radius:16px}
+  .field{padding:12px 14px}
+  .field-input-wrap input{font-size:13px;padding:9px 12px}
+  header{padding:12px 14px}
+  .brand h1{font-size:15px}
+}
+</style></head><body>
+<header>
+  <div class="brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#bf5af2" stroke-width="1.5">
+        <path d="M4 4h16v16H4z" stroke-linejoin="round"/>
+        <path d="M8 10h8M8 14h5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h1>Tom Riddle's <span>Diary</span></h1>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost" id="reloadBtn" title="\u91CD\u8F7D\u6240\u6709 Worker \u5B9E\u4F8B">
+      <span id="reloadIcon">\u{1F504}</span> \u91CD\u8F7D
+    </button>
+    <button class="btn btn-danger" id="logoutBtn">\u9000\u51FA</button>
+  </div>
+</header>
+
+<main id="content">
+  <div style="text-align:center;padding:60px 20px;color:var(--text-3)">
+    <div style="font-size:28px;margin-bottom:12px">\u23F3</div>
+    <div>\u6B63\u5728\u52A0\u8F7D\u914D\u7F6E\u2026</div>
+  </div>
+</main>
+
+<div class="save-bar" id="saveBar">
+  <div class="status-dot" id="statusDot"></div>
+  <span class="status-text" id="statusText">\u5C31\u7EEA</span>
+  <span class="dirty-count" id="dirtyCount">0 \u9879\u4FEE\u6539</span>
+  <button class="btn btn-primary" id="saveBtn">\u{1F4BE} \u4FDD\u5B58\u4FEE\u6539</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u914D\u7F6E\u6570\u636E & \u72B6\u6001
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+let configData = {};
+let dirtyFields = new Set();
+let isSaving = false;
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u5206\u7EC4\u5B9A\u4E49 (\u987A\u5E8F + \u56FE\u6807 + \u6807\u7B7E)
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+const GROUPS = [
+  {
+    key: 'secrets', label: 'API \u5BC6\u94A5', icon: '\u{1F511}',
+    fields: [
+      { name: 'agnes_keys',     desc: 'Agnes \u56FD\u9645\u7AD9 API Key\uFF0C\u591A\u4E2A\u7528\u9017\u53F7\u5206\u9694', secret: true },
+      { name: 'agnes_cn_keys',  desc: 'Agnes \u56FD\u5185\u7AD9 API Key\uFF0C\u591A\u4E2A\u7528\u9017\u53F7\u5206\u9694\uFF08\u53EF\u9009\uFF09', secret: true },
+      { name: 'zhipu_keys',     desc: '\u667A\u8C31 AI API Key\uFF0C\u591A\u4E2A\u7528\u9017\u53F7\u5206\u9694\uFF08\u63A8\u8350\u514D\u8D39\u515C\u5E95\uFF09', secret: true },
+      { name: 'admin_password',  desc: '\u7BA1\u7406\u540E\u53F0\u767B\u5F55\u5BC6\u7801', secret: true },
+      { name: 'admin_token',     desc: '\u4F1A\u8BDD\u7B7E\u540D\u5BC6\u94A5\uFF08\u4EFB\u610F\u968F\u673A\u5B57\u7B26\u4E32\uFF09', secret: true },
+    ]
+  },
+  {
+    key: 'models', label: '\u6A21\u578B\u4E0E\u63A5\u53E3', icon: '\u{1F916}',
+    fields: [
+      { name: 'agnes_model',        desc: 'Agnes \u56FD\u9645\u7AD9\u6A21\u578B\u540D\u79F0' },
+      { name: 'agnes_cn_model',    desc: 'Agnes \u56FD\u5185\u7AD9\u6A21\u578B\u540D\u79F0' },
+      { name: 'zhipu_model',       desc: '\u667A\u8C31\u6A21\u578B\u540D\u79F0' },
+      { name: 'agnes_base_url',    desc: 'Agnes \u56FD\u9645\u7AD9 API \u5730\u5740' },
+      { name: 'agnes_cn_base_url', desc: 'Agnes \u56FD\u5185\u7AD9 API \u5730\u5740' },
+      { name: 'zhipu_base_url',    desc: '\u667A\u8C31 API \u5730\u5740' },
+    ]
+  },
+  {
+    key: 'timing', label: '\u65F6\u5E8F\u53C2\u6570', icon: '\u23F1\uFE0F',
+    fields: [
+      { name: 'idle_timeout_ms',      desc: '\u505C\u7B14\u591A\u4E45\u540E\u53D1\u9001\u8BF7\u6C42\uFF08\u6BEB\u79D2\uFF09', num: true },
+      { name: 'poll_interval_ms',     desc: '\u9010\u5B57\u663E\u73B0\u95F4\u9694\uFF08\u6BEB\u79D2\uFF09', num: true },
+      { name: 'stroke_interval_ms',   desc: '\u6BCF\u7B14\u52A8\u753B\u6301\u7EED\u65F6\u95F4\uFF08\u6BEB\u79D2\uFF09', num: true },
+      { name: 'stroke_max_dur_ms',    desc: '\u5355\u7B14\u6700\u5927\u52A8\u753B\u65F6\u957F\uFF08\u6BEB\u79D2\uFF09', num: true },
+      { name: 'reply_fade_delay_ms',  desc: '\u56DE\u590D\u663E\u793A\u591A\u4E45\u540E\u5F00\u59CB\u6D88\u5931\uFF08\u6BEB\u79D2\uFF09', num: true },
+      { name: 'fade_duration_ms',     desc: '\u6D88\u6563\u52A8\u753B\u65F6\u957F\uFF08\u6BEB\u79D2\uFF09', num: true },
+      { name: 'request_timeout_ms',  desc: '\u5355\u6B21 API \u8BF7\u6C42\u8D85\u65F6\uFF08\u6BEB\u79D2\uFF09', num: true },
+    ]
+  },
+  {
+    key: 'ink', label: '\u7B14\u8FF9\u4E0E\u663E\u793A', icon: '\u{1F58C}\uFE0F',
+    fields: [
+      { name: 'pressure_min_px',   desc: '\u6700\u5C0F\u7B14\u8FF9\u5BBD\u5EA6\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'pressure_max_px',   desc: '\u6700\u5927\u7B14\u8FF9\u5BBD\u5EA6\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'min_dist_px',       desc: '\u6700\u5C0F\u91C7\u6837\u8DDD\u79BB\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'max_dist_px',       desc: '\u6700\u5927\u63D2\u503C\u8DDD\u79BB\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'svg_stroke_width',  desc: 'SVG \u8DEF\u5F84\u63CF\u8FB9\u5BBD\u5EA6\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'line_height_px',    desc: '\u884C\u9AD8\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'margin_top_px',     desc: '\u56DE\u590D\u9876\u90E8\u8FB9\u8DDD\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'margin_x_px',       desc: '\u56DE\u590D\u5DE6\u4FA7\u8FB9\u8DDD\uFF08\u50CF\u7D20\uFF09', num: true },
+      { name: 'font_size_px',      desc: '\u57FA\u7840\u5B57\u53F7\uFF08\u50CF\u7D20\uFF09', num: true },
+    ]
+  },
+  {
+    key: 'memory', label: '\u8BB0\u5FC6\u4E0E\u540E\u7AEF', icon: '\u{1F9E0}',
+    fields: [
+      { name: 'max_history_turns', desc: '\u6700\u5927\u5BF9\u8BDD\u5386\u53F2\u8F6E\u6570', num: true },
+      { name: 'max_retries',       desc: 'API \u6700\u5927\u91CD\u8BD5\u6B21\u6570', num: true },
+      { name: 'max_tokens',        desc: '\u6A21\u578B\u6700\u5927\u8F93\u51FA token \u6570', num: true },
+      { name: 'temperature',       desc: '\u91C7\u6837\u6E29\u5EA6 0-2\uFF0C\u8D8A\u5927\u8D8A\u53D1\u6563', num: true },
+      { name: 'history_ttl_sec',   desc: 'KV \u8BB0\u5FC6\u8FC7\u671F\u65F6\u95F4\uFF08\u79D2\uFF09', num: true },
+    ]
+  },
+];
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u5DE5\u5177\u51FD\u6570
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function maskSecret(val) {
+  const s = String(val);
+  if (s.length <= 8) return '\u2022'.repeat(s.length);
+  return s.substring(0, 4) + '\u2022'.repeat(Math.max(0, s.length - 8)) + s.substring(s.length - 4);
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot ' + state;
+  txt.textContent = text;
+}
+
+function updateSaveBar() {
+  const bar = document.getElementById('saveBar');
+  const count = document.getElementById('dirtyCount');
+  if (dirtyFields.size > 0) {
+    bar.classList.add('show');
+    count.textContent = dirtyFields.size + ' \u9879\u4FEE\u6539';
+    count.classList.add('show');
+  } else {
+    bar.classList.remove('show');
+    count.classList.remove('show');
+  }
+}
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u6E32\u67D3
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+function render() {
+  const root = document.getElementById('content');
+  let html = '';
+
+  for (const group of GROUPS) {
+    html += '<div class="group">';
+    html += '<div class="group-header">';
+    html += '<div class="icon">' + group.icon + '</div>';
+    html += '<h2>' + group.label + '</h2>';
+    html += '<span class="count">' + group.fields.length + ' \u9879</span>';
+    html += '</div>';
+
+    for (const f of group.fields) {
+      const entry = ((configData.config || {})[f.name]) || {};
+      const isSecret = f.secret === true;
+
+      // \u786E\u5B9A\u663E\u793A\u503C\uFF1AKV \u8986\u76D6 > \u73AF\u5883\u53D8\u91CF > \u9ED8\u8BA4\u503C\uFF08\u59CB\u7EC8\u9884\u586B\uFF09
+      let displayVal = '';
+      const source = entry.source || 'default';
+      const defVal = entry.default || '';
+
+      if (source === 'kv' && entry.current) {
+        displayVal = isSecret ? maskSecret(entry.current) : entry.current;
+      } else if (source === 'env' && entry.current) {
+        displayVal = isSecret ? maskSecret(entry.current) : entry.current;
+      } else {
+        // \u59CB\u7EC8\u9884\u586B\u9ED8\u8BA4\u503C\u5230\u8F93\u5165\u6846
+        displayVal = defVal && defVal !== '(empty)' ? defVal : '';
+      }
+
+      // Badge
+      let badge = '';
+      if (source === 'kv') {
+        badge = '<span class="badge badge-kv">\u5DF2\u5B58</span>';
+      } else if (source === 'env') {
+        badge = '<span class="badge badge-env">\u73AF\u5883\u53D8\u91CF</span>';
+      } else if (isSecret) {
+        badge = '<span class="badge badge-secret">\u5BC6\u94A5</span>';
+      } else {
+        badge = '<span class="badge badge-default">\u9ED8\u8BA4</span>';
+      }
+
+      const inputType = isSecret ? 'password' : (f.num ? 'number' : 'text');
+      // \u59CB\u7EC8\u663E\u793A\u9ED8\u8BA4\u503C\u4F5C\u4E3A placeholder \u63D0\u793A
+      const placeholder = defVal && defVal !== '(empty)' ? '\u9ED8\u8BA4: ' + defVal : '\u672A\u8BBE\u7F6E';
+
+      html += '<div class="field" id="field_' + f.name + '">';
+      html += '<div class="field-label">' + badge + '<code>' + f.name + '</code></div>';
+      html += '<div class="field-input-wrap">';
+      html += '<input type="' + inputType + '" id="f_' + f.name + '" ';
+      html += 'value="' + escapeHtml(displayVal) + '" ';
+      html += 'data-name="' + f.name + '" ';
+      html += 'data-secret="' + isSecret + '" ';
+      html += 'placeholder="' + escapeHtml(placeholder) + '" ';
+      if (f.num) html += 'step="any" ';
+      html += '>';
+      if (isSecret) {
+        html += '<button type="button" class="toggle-visibility" data-target="f_' + f.name + '" title="\u663E\u793A/\u9690\u85CF">';
+        html += '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3"/></svg>';
+        html += '</button>';
+      }
+      html += '</div>';
+      html += '<div class="field-desc">' + f.desc;
+      if (defVal && defVal !== '(empty)') {
+        html += ' \xB7 <span class="default-val">\u9ED8\u8BA4: ' + defVal + '</span>';
+      }
+      html += '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  root.innerHTML = html;
+
+  // Bind events
+  root.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', () => {
+      const name = input.dataset.name;
+      dirtyFields.add(name);
+      document.getElementById('field_' + name).classList.add('modified');
+      setStatus('dirty', '\u6709\u672A\u4FDD\u5B58\u7684\u4FEE\u6539\u2026');
+      updateSaveBar();
+    });
+    input.addEventListener('change', () => {
+      const name = input.dataset.name;
+      dirtyFields.add(name);
+      document.getElementById('field_' + name).classList.add('modified');
+      updateSaveBar();
+    });
+  });
+
+  root.querySelectorAll('.toggle-visibility').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (target) target.type = target.type === 'password' ? 'text' : 'password';
+    });
+  });
+}
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u6570\u636E\u52A0\u8F7D
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/admin/config', { credentials: 'include' });
+    if (res.status === 401) { location.href = '/admin/login'; return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    configData = await res.json();
+    render();
+  } catch (e) {
+    document.getElementById('content').innerHTML =
+      '<div style="text-align:center;padding:60px 20px;color:var(--red)">' +
+      '<div style="font-size:28px;margin-bottom:12px">\u26A0\uFE0F</div>' +
+      '<div>\u52A0\u8F7D\u5931\u8D25: ' + e.message + '</div>' +
+      '<button class="btn btn-primary" style="margin-top:16px" onclick="loadConfig()">\u91CD\u8BD5</button>' +
+      '</div>';
+  }
+}
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550arma\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u4FDD\u5B58
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+async function saveConfig() {
+  if (isSaving) return;
+  if (dirtyFields.size === 0) { showToast('\u6CA1\u6709\u9700\u8981\u4FDD\u5B58\u7684\u4FEE\u6539', 'info'); return; }
+
+  isSaving = true;
+  setStatus('saving', '\u4FDD\u5B58\u4E2D\u2026');
+  document.getElementById('saveBtn').disabled = true;
+
+  const updates = {};
+  dirtyFields.forEach(name => {
+    const el = document.getElementById('f_' + name);
+    if (el) updates[name] = el.value;
+  });
+
+  try {
+    const res = await fetch('/api/admin/config', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.status === 401) { location.href = '/admin/login'; return; }
+    const data = await res.json();
+    if (data.success) {
+      setStatus('saved', '\u2705 \u5DF2\u4FDD\u5B58 ' + data.saved + ' \u9879\uFF0C\u6B63\u5728\u91CD\u8F7D\u2026');
+      showToast('\u4FDD\u5B58\u6210\u529F\uFF01\u91CD\u8F7D\u4E2D\u2026', 'success');
+      dirtyFields.clear();
+      // Reload config to reflect new state
+      await loadConfig();
+      // Trigger reload
+      await reloadAll();
+      setStatus('saved', '\u2705 \u6240\u6709\u4FEE\u6539\u5DF2\u751F\u6548');
+    } else {
+      setStatus('error', data.message || '\u4FDD\u5B58\u5931\u8D25');
+      showToast(data.message || '\u4FDD\u5B58\u5931\u8D25', 'error');
+    }
+  } catch (e) {
+    setStatus('error', '\u7F51\u7EDC\u9519\u8BEF: ' + e.message);
+    showToast('\u7F51\u7EDC\u9519\u8BEF: ' + e.message, 'error');
+  } finally {
+    isSaving = false;
+    document.getElementById('saveBtn').disabled = false;
+    updateSaveBar();
+  }
+}
+
+async function reloadAll() {
+  try {
+    const res = await fetch('/api/admin/reload', { method: 'POST', credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      showToast('\u{1F504} ' + (data.message || '\u91CD\u8F7D\u5B8C\u6210'), 'success');
+    }
+  } catch(e) {}
+}
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u4E8B\u4EF6\u7ED1\u5B9A
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+document.getElementById('saveBtn').addEventListener('click', saveConfig);
+
+document.getElementById('reloadBtn').addEventListener('click', async () => {
+  setStatus('saving', '\u6B63\u5728\u91CD\u8F7D\u6240\u6709\u5B9E\u4F8B\u2026');
+  await reloadAll();
+  setStatus('saved', '\u2705 \u91CD\u8F7D\u5B8C\u6210');
+  setTimeout(() => setStatus('saved', '\u5C31\u7EEA'), 2000);
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+  location.href = '/admin/login';
+});
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u952E\u76D8\u5FEB\u6377\u952E: Cmd/Ctrl+S \u4FDD\u5B58
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    saveConfig();
+  }
+});
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+// \u521D\u59CB\u5316
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+loadConfig();
+<\/script>
+</body></html>`;
 function handleAdminLoginPage() {
   return new Response(LOGIN_HTML, {
     headers: { "Content-Type": "text/html; charset=utf-8" }
@@ -1199,14 +1793,14 @@ async function handleAdminLogin(request, env) {
   } catch {
   }
   if (fails >= 5) {
-    return jsonResponse({ message: "\u5C1D\u8BD5\u6B21\u6570\u8FC7\u591A\uFF0C\u8BF75\u5206\u949F\u540E\u518D\u8BD5" }, 401);
+    return jsonResponse({ message: "\u5C1D\u8BD5\u6B21\u6570\u8FC7\u591A\uFF0C\u8BF7 5 \u5206\u949F\u540E\u518D\u8BD5" }, 401);
   }
   const inputHash = await hashPassword(password);
   const expectedHash = await hashPassword(adminPw);
   if (inputHash !== expectedHash) {
     fails++;
     await env.RIDDLE_KV.put(failKey, String(fails), { expirationTtl: 300 });
-    return jsonResponse({ message: "\u5BC6\u7801\u9519\u8BEF" }, 401);
+    return jsonResponse({ message: "\u5BC6\u7801\u9519\u8BEF\uFF08" + fails + "/5\uFF09" }, 401);
   }
   await env.RIDDLE_KV.delete(failKey);
   const token = await makeSessionToken(env.adminToken || "riddle-default-secret");
@@ -1250,7 +1844,10 @@ async function handleAdminGetConfig(request, env) {
   const result = {};
   for (const name of allVars) {
     const docs = VAR_DOCS2[name];
-    const fromEnv = env[name];
+    let fromEnv = env[name];
+    if (fromEnv === void 0 || fromEnv === "") {
+      fromEnv = env[toCamel(name)];
+    }
     const fromKv = kvConfig[name];
     let current, source;
     if (fromKv !== void 0) {
@@ -1264,9 +1861,8 @@ async function handleAdminGetConfig(request, env) {
       source = "default";
     }
     const isSecret = name.includes("keys") || name.includes("password") || name.includes("token");
-    const displayValue = isSecret && current && current !== "" ? maskSecret(current) : current;
     result[name] = {
-      current: displayValue,
+      current: isSecret && current ? maskSecret(current) : current,
       default: docs?.default || "",
       desc: docs?.desc || "",
       group: docs?.group || "Other",

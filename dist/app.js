@@ -1,13 +1,6 @@
 /* ============================================================
  * Riddle Web — Tom Riddle's Diary
- * Faithful port of MaximeRivest/Riddle
- *
- * v3.3:
- *  - Zero admin entry in frontend (admin is /admin only, backend-served)
- *  - Smooth cubic Bézier ink with pressure sensitivity
- *  - Fullscreen: writing area only + floating toolbar
- *  - Landscape: follow system (no manual button)
- *  - Cross-browser (Chrome/Edge/Safari/Firefox)
+ * v3.6: fix writing input + Apple-style UI polish
  * ============================================================ */
 
 (() => {
@@ -33,7 +26,6 @@ const DEFAULTS = {
   fadeDurationMs:   1200,
 };
 
-// ─── Runtime config (populated by /api/config) ───────────────
 let CFG = { ...DEFAULTS };
 
 // ─── Themes ────────────────────────────────────────────────
@@ -41,13 +33,13 @@ const THEMES = {
   diary: {
     name: "Tom's Diary",
     bg: '#0a0a0f', ink: '#e8e8e8', accent: '#7a7a8a',
-    font: "'Dancing Script', cursive",
+    font: "'Dancing Script', 'Caveat', cursive",
     pageBg: 'radial-gradient(ellipse at center, #111118 0%, #050508 100%)',
     pageSolid: '#0c0c12',
   },
   parchment: {
     name: 'Parchment', bg: '#f4ead5', ink: '#3a2a1a', accent: '#8a7a6a',
-    font: "'Caveat', cursive",
+    font: "'Caveat', 'Dancing Script', cursive",
     pageBg: 'radial-gradient(ellipse at center, #f4ead5 0%, #e0d4b8 100%)',
     pageSolid: '#f0e6d0',
   },
@@ -83,19 +75,27 @@ const errorClose       = document.getElementById('error-close');
 const writingSurface   = document.getElementById('writing-surface');
 const fullscreenToolbar= document.getElementById('floating-toolbar');
 
-// ─── Canvas sizing ─────────────────────────────────────────
+// ─── Canvas sizing (FIX: proper resize with DPR) ──────────
 let DPR = 1;
+let cssWidth = 0, cssHeight = 0;
+
 function resizeCanvas() {
   DPR = Math.min(window.devicePixelRatio || 1, 3);
   const rect = canvas.getBoundingClientRect();
-  canvas.width  = Math.max(1, Math.floor(rect.width  * DPR));
-  canvas.height = Math.max(1, Math.floor(rect.height * DPR));
+  cssWidth  = rect.width;
+  cssHeight = rect.height;
+  const newW = Math.max(1, Math.floor(rect.width  * DPR));
+  const newH = Math.max(1, Math.floor(rect.height * DPR));
+  if (canvas.width !== newW)  canvas.width  = newW;
+  if (canvas.height !== newH) canvas.height = newH;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   applyTheme();
 }
 window.addEventListener('resize', () => { setTimeout(resizeCanvas, 50); });
+// FIX: also resize on orientation change
+window.addEventListener('orientationchange', () => { setTimeout(resizeCanvas, 200); });
 
 // ─── Theme application ──────────────────────────────────────
 function applyTheme() {
@@ -137,22 +137,39 @@ let renderRAF = null;
 let lastPointerTime = 0;
 let pointerVelocity = 0;
 
+// FIX: get pointer position with proper coordinate mapping
 function getPointerPos(e) {
   const rect = canvas.getBoundingClientRect();
   let clientX, clientY, pressure;
-  if (e.touches && e.touches.length > 0) {
-    clientX = e.touches[0].clientX; clientY = e.touches[0].clientY;
-    pressure = e.touches[0].force || 0.5;
-  } else if (e.changedTouches && e.changedTouches.length > 0) {
-    clientX = e.changedTouches[0].clientX; clientY = e.changedTouches[0].clientY;
-    pressure = e.changedTouches[0].force || 0.5;
-  } else {
-    clientX = e.clientX; clientY = e.clientY;
+
+  // PointerEvent (preferred, covers mouse + pen + touch on modern browsers)
+  if (e.clientX !== undefined && e.clientY !== undefined) {
+    clientX = e.clientX;
+    clientY = e.clientY;
     pressure = e.pressure || (e.pointerType === 'pen' ? 0.7 : 0.5);
   }
+  // TouchEvent fallback
+  else if (e.touches && e.touches.length > 0) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+    pressure = e.touches[0].force || 0.5;
+  }
+  else if (e.changedTouches && e.changedTouches.length > 0) {
+    clientX = e.changedTouches[0].clientX;
+    clientY = e.changedTouches[0].clientY;
+    pressure = e.changedTouches[0].force || 0.5;
+  }
+  else {
+    return { x: 0, y: 0, pressure: 0.5 };
+  }
+
+  // Map client coords → canvas CSS coords (no DPR math needed since ctx is scaled)
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+
   return {
-    x: (clientX - rect.left) * (canvas.width  / rect.width  / DPR),
-    y: (clientY - rect.top)  * (canvas.height / rect.height / DPR),
+    x: Math.max(0, Math.min(x, rect.width)),
+    y: Math.max(0, Math.min(y, rect.height)),
     pressure: Math.max(0.05, Math.min(1, pressure)),
   };
 }
@@ -167,8 +184,8 @@ function shouldSamplePoint(p, last) {
   const dist = Math.sqrt(dx*dx + dy*dy);
   const now = performance.now();
   const dt = now - lastPointerTime;
+  if (dt < 8) return false; // throttle to ~120Hz
   const adaptiveMin = pointerVelocity > 2 ? CFG.minDistPx * 0.5 : CFG.minDistPx;
-  if (dt < 8) return false; // throttle to ~120Hz max
   return dist >= adaptiveMin;
 }
 
@@ -180,9 +197,11 @@ function startStroke(p) {
   strokes.push(currentStroke);
   isWriting = true;
   hintText.classList.add('hidden');
+  setStatus('writing', 'Writing&hellip;');
 }
 
 function addPointToStroke(p) {
+  if (!currentStroke) return;
   const last = currentStroke.points[currentStroke.points.length - 1];
   if (!shouldSamplePoint(p, last)) return;
   const w = pressureToWidth(p.pressure);
@@ -195,7 +214,6 @@ function addPointToStroke(p) {
 
 function endStroke() {
   if (currentStroke && currentStroke.points.length < 2) {
-    // dot
     const p = currentStroke.points[0];
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.w * 0.5, 0, Math.PI * 2);
@@ -204,6 +222,7 @@ function endStroke() {
   }
   currentStroke = null;
   isWriting = false;
+  setStatus('ready', 'Paused&hellip;');
   scheduleIdleTimeout();
 }
 
@@ -225,21 +244,17 @@ function scheduleRender() {
 }
 
 function renderIncremental() {
-  // Draw only the last few points for performance
   const s = strokes[strokes.length - 1];
   if (!s || s.points.length < 2) return;
   const startIdx = Math.max(1, s.points.length - 4);
   ctx.save();
   ctx.fillStyle = THEMES[currentTheme].ink;
   for (let i = startIdx; i < s.points.length; i++) {
-    const p0 = s.points[i - 1];
-    const p1 = s.points[i];
-    const midW = (p0.w + p1.w) * 0.5;
+    const p = s.points[i];
     ctx.beginPath();
-    ctx.arc(p1.x, p1.y, midW * 0.5, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.w * 0.5, 0, Math.PI * 2);
     ctx.fill();
   }
-  // Draw connecting line with gradient width
   if (s.points.length >= 2) {
     const p0 = s.points[s.points.length - 2];
     const p1 = s.points[s.points.length - 1];
@@ -275,7 +290,6 @@ function drawStrokeSmooth(stroke) {
     }
     return;
   }
-  // Cubic bezier via Catmull-Rom
   ctx.save();
   ctx.fillStyle = THEMES[currentTheme].ink;
   ctx.strokeStyle = THEMES[currentTheme].ink;
@@ -292,7 +306,6 @@ function drawStrokeSmooth(stroke) {
     const c2x = p2.x - (p3.x - p1.x) / 6;
     const c2y = p2.y - (p3.y - p1.y) / 6;
 
-    // Draw variable-width stroke as filled shape
     const steps = Math.max(4, Math.floor(Math.sqrt((p2.x-p1.x)**2 + (p2.y-p1.y)**2) * 2));
     const leftEdge = [];
     const rightEdge = [];
@@ -301,7 +314,6 @@ function drawStrokeSmooth(stroke) {
       const t = s / steps;
       const x = bezierPoint(p1.x, c1x, c2x, p2.x, t);
       const y = bezierPoint(p1.y, c1y, c2y, p2.y, t);
-      // normal
       let nx, ny;
       if (s < steps) {
         const tx = bezierPoint(p1.x, c1x, c2x, p2.x, t + 0.01) - x;
@@ -326,15 +338,15 @@ function drawStrokeSmooth(stroke) {
     ctx.fill();
   }
 
-  // Ink bleed layer (semi-transparent wider stroke)
+  // Ink bleed layer
   ctx.globalAlpha = 0.12;
   ctx.lineWidth = stroke.width * 1.8;
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length - 1; i++) {
-    const p1 = pts[i], p2 = pts[i+1];
-    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
-    ctx.quadraticCurveTo(p1.x, p1.y, mx, my);
+    const mx = (pts[i].x + pts[i+1].x) / 2;
+    const my = (pts[i].y + pts[i+1].y) / 2;
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
   }
   ctx.stroke();
   ctx.globalAlpha = 1.0;
@@ -348,38 +360,96 @@ function bezierPoint(p0, p1, p2, p3, t) {
 }
 
 function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-// ─── Pointer event handlers ─────────────────────────────────
+// ═════════════════════════════════════════════════════════
+// FIX: Robust pointer event handlers (the core writing fix)
+// ═════════════════════════════════════════════════════════
 function onPointerDown(e) {
   e.preventDefault();
   if (e.pointerType === 'touch' && e.isPrimary === false) return;
-  canvas.setPointerCapture(e.pointerId);
+  try { canvas.setPointerCapture(e.pointerId); } catch(_) {}
   const p = getPointerPos(e);
   startStroke(p);
   lastPointerTime = performance.now();
 }
+
 function onPointerMove(e) {
   if (!isWriting) return;
   e.preventDefault();
   const p = getPointerPos(e);
   addPointToStroke(p);
 }
+
 function onPointerUp(e) {
+  if (!isWriting) return;
+  e.preventDefault();
+  try { canvas.releasePointerCapture(e.pointerId); } catch(_) {}
+  endStroke();
+}
+
+function onPointerCancel() {
+  if (isWriting) endStroke();
+}
+
+// FIX: Touch events as backup (for older browsers / edge cases)
+function onTouchStart(e) {
+  if (e.touches.length > 1) return; // multi-touch = ignore
+  e.preventDefault();
+  const touch = e.touches[0];
+  const simulatedEvent = {
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    pressure: touch.force || 0.5,
+    pointerType: 'touch',
+    pointerId: touch.identifier,
+    preventDefault: () => {},
+  };
+  const p = getPointerPos(simulatedEvent);
+  startStroke(p);
+  lastPointerTime = performance.now();
+}
+
+function onTouchMove(e) {
+  if (!isWriting) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const simulatedEvent = {
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    pressure: touch.force || 0.5,
+    pointerType: 'touch',
+    preventDefault: () => {},
+  };
+  const p = getPointerPos(simulatedEvent);
+  addPointToStroke(p);
+}
+
+function onTouchEnd(e) {
   if (!isWriting) return;
   e.preventDefault();
   endStroke();
 }
-function onPointerCancel() { endStroke(); }
 
-canvas.addEventListener('pointerdown', onPointerDown);
-canvas.addEventListener('pointermove', onPointerMove);
-canvas.addEventListener('pointerup', onPointerUp);
-canvas.addEventListener('pointercancel', onPointerCancel);
-// Touch fallback
-canvas.addEventListener('touchstart', e => { if (e.touches.length > 1) e.preventDefault(); }, {passive:false});
+// Bind BOTH pointer and touch events
+canvas.addEventListener('pointerdown',   onPointerDown,   { passive: false });
+canvas.addEventListener('pointermove',   onPointerMove,   { passive: false });
+canvas.addEventListener('pointerup',     onPointerUp,     { passive: false });
+canvas.addEventListener('pointercancel', onPointerCancel, { passive: false });
+
+// Touch fallback (only fires if Pointer Events don't handle it)
+canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
+canvas.addEventListener('touchend',    onTouchEnd,    { passive: false });
+canvas.addEventListener('touchcancel', onTouchEnd,  { passive: false });
+
+// Prevent scrolling/zooming on the canvas
+canvas.addEventListener('gesturestart', e => e.preventDefault());
+canvas.addEventListener('dblclick',    e => e.preventDefault());
 
 // ─── Status ────────────────────────────────────────────────
 function setStatus(state, text) {
@@ -397,16 +467,18 @@ errorClose.addEventListener('click', () => errorOverlay.classList.add('hidden'))
 // ─── Send to Tom ──────────────────────────────────────────
 async function sendToTom() {
   setStatus('thinking', 'The diary is thinking&hellip;');
-  // Fade out user ink
   fadeOutInk();
-  // Capture canvas as PNG
   const pngData = canvas.toDataURL('image/png');
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageData: pngData }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!resp.ok) {
       const err = await resp.json().catch(()=>({}));
       showError('Tom is silent', err.message || ('HTTP ' + resp.status));
@@ -415,7 +487,11 @@ async function sendToTom() {
     }
     await consumeSSE(resp);
   } catch(e) {
-    showError('Connection failed', e.message || 'Network error');
+    if (e.name === 'AbortError') {
+      showError('Timeout', 'Tom took too long to reply. Check /api/setup');
+    } else {
+      showError('Connection failed', e.message || 'Network error');
+    }
     setStatus('ready', 'Write again&hellip;');
   }
 }
@@ -450,7 +526,7 @@ async function consumeSSE(resp) {
         } else if (evt.type === 'error') {
           showError('Tom is silent', evt.message || evt.text || 'Unknown error');
         }
-      } catch(_) {}
+      } catch(e) { console.warn('SSE parse error:', e, data); }
     }
   }
   setStatus('ready', 'Write again&hellip;');
@@ -536,7 +612,9 @@ async function writeLineWithStrokes(text, lineIndex, theme) {
   if (!bitmap) { drawTextFallback(text, startX, startY, theme); return; }
   thinBitmap(bitmap);
   const strokePaths = traceStrokes(bitmap);
-  for (const sp of strokePaths) await drawAnimatedStroke(sp, startX, startY, theme);
+  for (const sp of strokePaths) {
+    await drawAnimatedStroke(sp, startX, startY, theme);
+  }
 }
 
 function drawTextFallback(text, x, y, theme) {
@@ -666,17 +744,18 @@ async function loadConfig() {
     const resp = await fetch('/api/config');
     if (resp.ok) {
       const data = await resp.json();
-      const src = data.runtime || data;
-      if (src) {
+      // FIX: handle both {runtime} and {config} response shapes
+      const src = data.runtime || data.config || data;
+      if (src && typeof src === 'object') {
         const mapped = {};
         const keyMap = {
-          'idleTimeoutMs':'idleTimeoutMs','minDistPx':'minDistPx','maxDistPx':'maxDistPx',
-          'pressureMinPx':'pressureMinPx','pressureMaxPx':'pressureMaxPx',
-          'pollIntervalMs':'pollIntervalMs','strokeIntervalMs':'strokeIntervalMs',
-          'strokeMaxDurMs':'strokeMaxDurMs','svgStrokeWidth':'svgStrokeWidth',
-          'maxLines':'maxLines','lineHeightPx':'lineHeightPx',
-          'marginTopPx':'marginTopPx','marginXPx':'marginXPx','fontSizePx':'fontSizePx',
-          'replyFadeDelayMs':'replyFadeDelayMs','fadeDurationMs':'fadeDurationMs',
+          'idle_timeout_ms':'idleTimeoutMs','min_dist_px':'minDistPx','max_dist_px':'maxDistPx',
+          'pressure_min_px':'pressureMinPx','pressure_max_px':'pressureMaxPx',
+          'poll_interval_ms':'pollIntervalMs','stroke_interval_ms':'strokeIntervalMs',
+          'stroke_max_dur_ms':'strokeMaxDurMs','svg_stroke_width':'svgStrokeWidth',
+          'max_lines':'maxLines','line_height_px':'lineHeightPx',
+          'margin_top_px':'marginTopPx','margin_x_px':'marginXPx','font_size_px':'fontSizePx',
+          'reply_fade_delay_ms':'replyFadeDelayMs','fade_duration_ms':'fadeDurationMs',
         };
         for (const [k, v] of Object.entries(src)) {
           if (keyMap[k]) mapped[keyMap[k]] = v;
@@ -703,18 +782,41 @@ fullscreenBtn.addEventListener('click', () => {
     (target.requestFullscreen || target.webkitRequestFullscreen).call(target);
   }
 });
-document.addEventListener('fullscreenchange', updateFullscreenIcon);
-document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+document.addEventListener('fullscreenchange', () => { updateFullscreenIcon(); setTimeout(resizeCanvas, 100); });
+document.addEventListener('webkitfullscreenchange', () => { updateFullscreenIcon(); setTimeout(resizeCanvas, 100); });
+
+// ─── Landscape: follow system only ───────────────────────
+// No manual button — purely CSS media query based
+// CSS handles @media (orientation: landscape) layout changes
 
 // ─── Init ───────────────────────────────────────────────────
 async function init() {
+  // FIX: resize first, then theme, then config
   resizeCanvas();
   setTheme(currentTheme);
   updateFullscreenIcon();
   setStatus('ready', 'Write with your pen&hellip;');
   await loadConfig();
-  fetch('/api/init', { method: 'GET' }).then(r=>r.json()).then(d=>{ if(d&&d.sessionId) localStorage.setItem('riddle-sid', d.sessionId); }).catch(()=>{});
+  fetch('/api/init', { method: 'GET' })
+    .then(r=>r.json())
+    .then(d=>{ if(d&&d.sessionId) localStorage.setItem('riddle-sid', d.sessionId); })
+    .catch(()=>{});
+  // FIX: resize again after fonts load (font metrics change layout)
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { resizeCanvas(); });
+  }
 }
+
+// FIX: Prevent default touch behaviors on the entire app container
+document.addEventListener('touchmove', e => {
+  if (e.target === canvas || canvas.contains(e.target)) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+document.addEventListener('contextmenu', e => {
+  if (e.target === canvas) e.preventDefault();
+});
 
 init();
 

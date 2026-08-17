@@ -630,7 +630,7 @@ function render() {
       const entry = ((configData.config || {})[f.name]) || {};
       const isSecret = f.secret === true;
 
-      // 确定显示值：KV 覆盖 > 环境变量 > 默认值
+      // 确定显示值：KV 覆盖 > 环境变量 > 默认值（始终预填）
       let displayVal = '';
       const source = entry.source || 'default';
       const defVal = entry.default || '';
@@ -640,7 +640,7 @@ function render() {
       } else if (source === 'env' && entry.current) {
         displayVal = isSecret ? maskSecret(entry.current) : entry.current;
       } else {
-        // default — show actual default value (not the placeholder text)
+        // 始终预填默认值到输入框
         displayVal = defVal && defVal !== '(empty)' ? defVal : '';
       }
 
@@ -657,6 +657,7 @@ function render() {
       }
 
       const inputType = isSecret ? 'password' : (f.num ? 'number' : 'text');
+      // 始终显示默认值作为 placeholder 提示
       const placeholder = defVal && defVal !== '(empty)' ? '默认: ' + defVal : '未设置';
 
       html += '<div class="field" id="field_' + f.name + '">';
