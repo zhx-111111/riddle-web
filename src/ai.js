@@ -73,12 +73,10 @@ export async function* streamChat(env, prov, messages, maxTokens) {
   const base = prov.base.replace(/\/+$/, "");
   const start = await nextIndex(env, prov.label, keys.length);
   let lastErr = null;
-  // Clamp maxTokens to safe range
-  const tokens = Math.max(256, Math.min(8192, Math.round(maxTokens || 2048)));
 
   for (let attempt = 0; attempt < keys.length; attempt++) {
     const key = keys[(start + attempt) % keys.length];
-    const body = { model: prov.model, stream: true, max_tokens: tokens, messages };
+    const body = { model: prov.model, stream: true, max_tokens: maxTokens, messages };
     // No thinking process in the diary's hand — disable per-provider.
     if (prov.kind === "agnes") body.chat_template_kwargs = { enable_thinking: false };
     if (prov.kind === "zhipu") body.thinking = { type: "disabled" };
@@ -123,11 +121,10 @@ async function completeOnce(env, prov, messages, maxTokens) {
   if (!keys.length) throw new ChatError(0, "no api keys configured");
   const base = prov.base.replace(/\/+$/, "");
   const start = await nextIndex(env, prov.label + ":once", keys.length);
-  const tokens = Math.max(256, Math.min(8192, Math.round(maxTokens || 2048)));
   let lastErr = null;
   for (let attempt = 0; attempt < keys.length; attempt++) {
     const key = keys[(start + attempt) % keys.length];
-    const body = { model: prov.model, stream: false, max_tokens: tokens, messages };
+    const body = { model: prov.model, stream: false, max_tokens: maxTokens, messages };
     if (prov.kind === "agnes") body.chat_template_kwargs = { enable_thinking: false };
     if (prov.kind === "zhipu") body.thinking = { type: "disabled" };
     try {
