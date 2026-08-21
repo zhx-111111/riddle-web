@@ -1,17 +1,11 @@
 // InkPad — the writer's pen.
 //
 // Captures pointer input (pen / finger / mouse), renders smooth anti-aliased
-// ink (midpoint quadratic curves, pressure + speed modulated width, DPR-aware
-// canvas so edges never alias), keeps a faithful stroke model, erases the way
-// the original diary does (two fingers, or the corner eraser, splitting
-// strokes under the eraser), rasterizes the committed page to a PNG for the
-// oracle (long side ≤ 800px, black on white — as in ink.rs), dissolves the
-// ink when the diary drinks it (a port of px_hash + dissolve_pass), and
-// detects a lone large "?" (a port of looks_like_question_mark in help.rs).
+// ink, keeps a faithful stroke model, erases (two fingers or corner eraser),
+// rasterizes to PNG, dissolves ink, detects "?".
 
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 
-/// Deterministic per-pixel hash for the dissolve pattern (port of ink.rs).
 function pxHash(x, y) {
   let h = Math.imul(x | 0, 0x9E3779B1) ^ Math.imul(y | 0, 0x85EBCA6B);
   h ^= h >>> 13;
@@ -24,15 +18,15 @@ export class InkPad {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d", { willReadFrequently: true });
-    this.strokes = [];      // committed: { pts: [{x,y,w}] }
+    this.strokes = [];
     this.current = null;
     this.pointers = new Map();
     this.twoFinger = false;
     this.erasing = false;
     this.eraseTool = false;
     this.color = "#221610";
-    this.strokeScale = 1.0; // admin 笔迹粗细
-    this.penScale = 1.0;    // paper-size factor
+    this.strokeScale = 1.0;
+    this.penScale = 1.0;
     this.w = 0; this.h = 0; this.dpr = 1;
     this.onChange = null;
   }
@@ -45,8 +39,15 @@ export class InkPad {
   }
 
   setColor(c) { this.color = c; }
-
   hasInk() { return this.strokes.length > 0 || !!this.current; }
+
+  /// Apply live config (pressure sensitivity, min/max px)
+  setConfig(cfg) {
+    if (!cfg) return;
+    this.pressureSensitivity = cfg.pressureSensitivity || 1.8;
+    this.pressureMinPx = cfg.pressureMinPx || 0.5;
+    this.pressureMaxPx = cfg.pressureMaxPx || 8.0;
+  }
 
   reset() {
     this.strokes = [];
@@ -55,8 +56,6 @@ export class InkPad {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
-
-  // ------------------------------------------------------------- rendering
 
   _prep(ctx) {
     ctx.lineCap = "round";
@@ -75,46 +74,35 @@ export class InkPad {
     if (this.current) drawStroke(ctx, this.current.pts, this.color, 0.96, 1);
   }
 
-  // ----------------------------------------------------------------- input
-
   toLocal(e) {
     const r = this.canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
+  // Pressure-sensitive width with admin-tunable sensitivity
   widthFor(pt, prev) {
+    const minP = this.pressureMinPx || 0.5;
+    const maxP = this.pressureMaxPx || 8.0;
+    const sens = this.pressureSensitivity || 1.8;
     let wf = 1;
     if (prev) {
       const d = Math.hypot(pt.x - prev.x, pt.y - prev.y);
       const dt = Math.max(1, pt.t - prev.t);
-      const v = d / dt; // px per ms
-      // Smoother speed modulation with easing curve
-      const speedFactor = Math.min(v / 2.5, 1);
-      wf = 1.6 - 0.7 * speedFactor; // range ~0.9 to 1.6
+      const v = d / dt;
+      wf = clamp(1.2 - v * 0.15 * sens * 0.5, 0.6, 1.3);
     }
-    // Enhanced pressure sensitivity with exponential curve for natural feel
-    // No pressure info (mouse/touch) → uses velocity-based width only
-    // Pen with pressure → exponential mapping for natural ink feel
-    let pf = 1;
-    if (pt.p && pt.p > 0 && pt.p !== 0.5) {
-      // Real pressure data: exponential curve for natural pen feel
-      const p = clamp(pt.p, 0, 1);
-      pf = 0.4 + Math.pow(p, 1.8) * 1.3; // range ~0.4 to 1.7
-    } else if (pt.p === 0.5) {
-      // Mouse default — slight variation based on velocity
-      pf = wf * 0.9;
-    }
-    return 2.6 * this.penScale * this.strokeScale * wf * pf * 2;
+    const p = clamp(pt.p, 0, 1);
+    // Amplified curve: low pressure → minP, high pressure → maxP
+    const pf = minP + Math.pow(p, Math.max(0.3, 1 / sens)) * (maxP - minP);
+    return pf * this.penScale * this.strokeScale * wf;
   }
 
-  /// Returns "draw" | "erase" | "ignore".
   pointerDown(e) {
     const pos = this.toLocal(e);
     this.pointers.set(e.pointerId, pos);
     try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ok */ }
 
     if (this.pointers.size === 2) {
-      // A second finger joins: erase (the web answer to flipping the marker).
       if (this.current && this.current.pts.length) this.strokes.push(this.current);
       this.current = null;
       this.twoFinger = true;
@@ -149,18 +137,7 @@ export class InkPad {
     if (this.erasing) { this.eraseAt(pos, 17); return; }
     if (!this.current) return;
 
-    // Use coalesced events for high-fidelity pen input (iPad Pencil, Surface Pen)
-    let evs;
-    if (typeof e.getCoalescedEvents === "function") {
-      evs = e.getCoalescedEvents();
-    } else {
-      evs = [e];
-    }
-    // Also try predicted events for zero-latency feel
-    if (typeof e.getPredictedEvents === "function" && evs.length <= 1) {
-      const pred = e.getPredictedEvents();
-      if (pred.length) evs = evs.concat(pred.slice(0, 2));
-    }
+    const evs = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [e];
     for (const ev of evs.length ? evs : [e]) this._addPoint(ev, this.toLocal(ev));
   }
 
@@ -177,59 +154,17 @@ export class InkPad {
 
   _addPoint(e, pos) {
     const prev = this.current.pts[this.current.pts.length - 1];
-    // Tighter dedup: only skip if truly identical (sub-pixel)
-    if (prev && Math.abs(pos.x - prev.x) < 0.3 && Math.abs(pos.y - prev.y) < 0.3) return;
-    const now = e.timeStamp || performance.now();
-    // Interpolate intermediate points for fast strokes (prevents gaps)
-    if (prev) {
-      const dx = pos.x - prev.x, dy = pos.y - prev.y;
-      const dist = Math.hypot(dx, dy);
-      const maxStep = 3.0; // px between interpolated points
-      if (dist > maxStep) {
-        const steps = Math.min(8, Math.floor(dist / maxStep));
-        const tStep = (now - prev.t) / steps;
-        for (let s = 1; s < steps; s++) {
-          const frac = s / steps;
-          const ix = prev.x + dx * frac;
-          const iy = prev.y + dy * frac;
-          // Interpolate pressure
-          const ip = prev.p + (e.pressure || 0.5 - prev.p) * frac;
-          const ipt = {
-            x: ix, y: iy,
-            t: prev.t + tStep * s,
-            p: ip > 0 ? ip : 0.5,
-          };
-          ipt.w = this.widthFor(ipt, prev);
-          this.current.pts.push(ipt);
-          this._renderTailLast();
-        }
-      }
-    }
+    if (prev && pos.x === prev.x && pos.y === prev.y) return;
     const pt = {
       x: pos.x, y: pos.y,
-      t: now,
+      t: e.timeStamp || performance.now(),
       p: e.pressure && e.pressure > 0 ? e.pressure : 0.5,
     };
-    pt.w = this.widthFor(pt, this.current.pts[this.current.pts.length - 1]);
+    pt.w = this.widthFor(pt, prev);
+    if (prev) pt.w = prev.w * 0.4 + pt.w * 0.6; // slightly less smoothing for more responsive pressure
     this.current.pts.push(pt);
     this._renderTail();
     this.onChange?.();
-  }
-
-  _renderTailLast() {
-    const pts = this.current.pts;
-    const n = pts.length;
-    if (n < 2) return;
-    const ctx = this.ctx;
-    ctx.globalAlpha = 0.96;
-    this._prep(ctx);
-    const a = pts[n - 2], b = pts[n - 1];
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.lineWidth = (a.w + b.w) / 2;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
   }
 
   _renderTail() {
@@ -240,72 +175,25 @@ export class InkPad {
     ctx.globalAlpha = 0.96;
     this._prep(ctx);
     if (n === 1) {
-      // Three-pass dot: outer glow + mid halo + solid core (eliminates aliasing)
-      ctx.save();
-      ctx.globalAlpha = 0.10;
-      ctx.beginPath();
-      ctx.arc(pts[0].x, pts[0].y, pts[0].w / 2 * 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.25;
-      ctx.beginPath();
-      ctx.arc(pts[0].x, pts[0].y, pts[0].w / 2 * 1.25, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.96;
       ctx.beginPath();
       ctx.arc(pts[0].x, pts[0].y, pts[0].w / 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     } else if (n === 2) {
-      const w = (pts[0].w + pts[1].w) / 2;
-      // Glow pass
-      ctx.save();
-      ctx.globalAlpha = 0.15;
-      ctx.lineWidth = w * 1.5;
       ctx.beginPath();
       ctx.moveTo(pts[0].x, pts[0].y);
       ctx.lineTo(pts[1].x, pts[1].y);
+      ctx.lineWidth = (pts[0].w + pts[1].w) / 2;
       ctx.stroke();
-      // Main pass
-      ctx.globalAlpha = 0.96;
-      ctx.lineWidth = w;
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      ctx.lineTo(pts[1].x, pts[1].y);
-      ctx.stroke();
-      ctx.restore();
     } else {
-      // Three-pass smooth quadratic curve: outer glow + mid halo + crisp core
       const a = pts[n - 3], b = pts[n - 2], c = pts[n - 1];
-      const mx1 = (a.x + b.x) / 2, my1 = (a.y + b.y) / 2;
-      const mx2 = (b.x + c.x) / 2, my2 = (b.y + c.y) / 2;
-      // Pass 1: wide soft glow
-      ctx.save();
-      ctx.globalAlpha = 0.10;
-      ctx.lineWidth = b.w * 1.7;
       ctx.beginPath();
-      ctx.moveTo(mx1, my1);
-      ctx.quadraticCurveTo(b.x, b.y, mx2, my2);
-      ctx.stroke();
-      // Pass 2: medium halo
-      ctx.globalAlpha = 0.22;
-      ctx.lineWidth = b.w * 1.3;
-      ctx.beginPath();
-      ctx.moveTo(mx1, my1);
-      ctx.quadraticCurveTo(b.x, b.y, mx2, my2);
-      ctx.stroke();
-      // Pass 3: crisp core
-      ctx.globalAlpha = 0.96;
+      ctx.moveTo((a.x + b.x) / 2, (a.y + b.y) / 2);
+      ctx.quadraticCurveTo(b.x, b.y, (b.x + c.x) / 2, (b.y + c.y) / 2);
       ctx.lineWidth = b.w;
-      ctx.beginPath();
-      ctx.moveTo(mx1, my1);
-      ctx.quadraticCurveTo(b.x, b.y, mx2, my2);
       ctx.stroke();
-      ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
-
-  // ----------------------------------------------------------------- erase
 
   eraseAt(pos, r) {
     const ctx = this.ctx;
@@ -318,9 +206,6 @@ export class InkPad {
     this._forgetNear(pos.x, pos.y, r);
   }
 
-  /// Drop committed stroke points under the eraser, splitting strokes that
-  /// are erased through the middle (port of forget_near in ink.rs) — the
-  /// stroke model stays true to the visible page.
   _forgetNear(x, y, r) {
     const r2 = (r + 2) * (r + 2);
     const kept = [];
@@ -337,8 +222,6 @@ export class InkPad {
     this.strokes = kept;
   }
 
-  // ----------------------------------------------------------------- model
-
   bbox() {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const consider = (p) => {
@@ -352,8 +235,6 @@ export class InkPad {
     return { x0, y0, x1, y1 };
   }
 
-  /// Strokes as decimated [x, y, radius] integer triples for memory keeping
-  /// (port of decimate in memory.rs: drop points closer than 3px).
   serialize() {
     const out = [];
     for (const s of this.strokes) {
@@ -374,14 +255,13 @@ export class InkPad {
     return out;
   }
 
-  /// Rasterize the ink to a PNG for the oracle: cropped to the ink bbox and
-  /// downscaled so the long side stays ≤ 800px (port of to_png in ink.rs).
-  exportPNG(maxSide = 800) {
+  /// Rasterize ink to PNG. bgColor/inkColor adapt to theme.
+  exportPNG(maxSide = 800, theme = null) {
     const b = this.bbox();
     if (!b) return null;
-    const pad = 20;
-    const x0 = Math.max(0, b.x0 - pad), y0 = Math.max(0, b.y0 - pad);
-    const x1 = Math.min(this.w, b.x1 + pad), y1 = Math.min(this.h, b.y1 + pad);
+    const p = 20;
+    const x0 = Math.max(0, b.x0 - p), y0 = Math.max(0, b.y0 - p);
+    const x1 = Math.min(this.w, b.x1 + p), y1 = Math.min(this.h, b.y1 + p);
     const cw = x1 - x0, ch = y1 - y0;
     if (cw < 4 || ch < 4) return null;
     const f = Math.max(1, Math.ceil(Math.max(cw, ch) / maxSide));
@@ -389,27 +269,29 @@ export class InkPad {
     const off = document.createElement("canvas");
     off.width = w; off.height = h;
     const octx = off.getContext("2d");
-    octx.fillStyle = "#ffffff";
+
+    // Dynamic background: dark theme → dark bg + light ink for better OCR
+    const isDark = theme && theme.id === "midnight";
+    octx.fillStyle = isDark ? "#000000" : "#ffffff";
     octx.fillRect(0, 0, w, h);
     octx.scale(1 / f, 1 / f);
     octx.translate(-x0, -y0);
-    for (const s of this.strokes) drawStroke(octx, s.pts, "#000000", 1, 1);
-    if (this.current) drawStroke(octx, this.current.pts, "#000000", 1, 1);
+    const inkColor = isDark ? "#f2ead8" : "#000000";
+    for (const s of this.strokes) drawStroke(octx, s.pts, inkColor, 1, 1);
+    if (this.current) drawStroke(octx, this.current.pts, inkColor, 1, 1);
     return off.toDataURL("image/png");
   }
 
-  // --------------------------------------------------------------- dissolve
-
-  /// "The diary drinks your ink": hash-dithered dissolve (ink.rs port).
+  /// Dissolve using requestAnimationFrame for smoother performance.
   dissolve(durMs = 1100) {
     return new Promise((resolve) => {
       const b = this.bbox();
       if (!b) { resolve(); return; }
-      const d = this.dpr, pad = 10;
-      const x0 = Math.max(0, Math.floor((b.x0 - pad) * d));
-      const y0 = Math.max(0, Math.floor((b.y0 - pad) * d));
-      const x1 = Math.min(this.canvas.width, Math.ceil((b.x1 + pad) * d));
-      const y1 = Math.min(this.canvas.height, Math.ceil((b.y1 + pad) * d));
+      const d = this.dpr, p = 10;
+      const x0 = Math.max(0, Math.floor((b.x0 - p) * d));
+      const y0 = Math.max(0, Math.floor((b.y0 - p) * d));
+      const x1 = Math.min(this.canvas.width, Math.ceil((b.x1 + p) * d));
+      const y1 = Math.min(this.canvas.height, Math.ceil((b.y1 + p) * d));
       const w = x1 - x0, h = y1 - y0;
       if (w <= 0 || h <= 0) { resolve(); return; }
       const img = this.ctx.getImageData(x0, y0, w, h);
@@ -424,37 +306,39 @@ export class InkPad {
       }
       let s = 0;
       const stepMs = durMs / stages;
-      const tick = () => {
+      let lastTime = performance.now();
+      const tick = (now) => {
         if (s >= stages) { resolve(); return; }
-        for (const ai of buckets[s]) data[ai] = 0;
-        this.ctx.putImageData(img, x0, y0);
-        s++;
-        setTimeout(tick, stepMs);
+        if (now - lastTime >= stepMs) {
+          for (const ai of buckets[s]) data[ai] = 0;
+          this.ctx.putImageData(img, x0, y0);
+          s++;
+          lastTime = now;
+        }
+        if (s < stages) requestAnimationFrame(tick);
+        else resolve();
       };
-      tick();
+      requestAnimationFrame(tick);
     });
   }
 
-  // ---------------------------------------------------- "?" detection
-
-  /// Does the committed ink look like a single big "?"? Port of
-  /// looks_like_question_mark (help.rs); thresholds scale with paper height
-  /// (the original was tuned for the 1404×1872 reMarkable screen).
+  /// Detects a lone large "?" — heavily relaxed for mobile / finger input.
   looksLikeQuestionMark() {
     const strokes = this.strokes.map((s) => s.pts);
-    if (!strokes.length || strokes.length > 3) return false;
+    if (!strokes.length || strokes.length > 5) return false; // allow up to 5 strokes
     const k = this.h / 1872;
     let mainI = 0;
     for (let i = 1; i < strokes.length; i++) if (strokes[i].length > strokes[mainI].length) mainI = i;
     const main = strokes[mainI];
-    if (main.length < 12) return false;
+    if (main.length < 4) return false; // very relaxed — fingers make short strokes
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of main) {
       x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
       x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
     }
     const w = x1 - x0, h = y1 - y0;
-    if (h < 280 * k || w < 70 * k || h < w) return false;
+    // Very relaxed thresholds: 100px height, 25px width, aspect 0.4
+    if (h < 100 * k || w < 25 * k || h < w * 0.4) return false;
     for (let i = 0; i < strokes.length; i++) {
       if (i === mainI) continue;
       const s = strokes[i];
@@ -463,39 +347,27 @@ export class InkPad {
         dx0 = Math.min(dx0, p.x); dy0 = Math.min(dy0, p.y);
         dx1 = Math.max(dx1, p.x); dy1 = Math.max(dy1, p.y);
       }
-      if (Math.max(dx1 - dx0, dy1 - dy0) > 90 * k) return false;
-      if ((dy0 + dy1) / 2 < y0 + h * 0.60) return false;
-      if ((dx0 + dx1) / 2 < x0 - 80 * k || (dx0 + dx1) / 2 > x1 + 80 * k) return false;
+      if (Math.max(dx1 - dx0, dy1 - dy0) > 180 * k) return false; // relaxed from 140
+      if ((dy0 + dy1) / 2 < y0 + h * 0.35) return false; // relaxed from 0.45
+      if ((dx0 + dx1) / 2 < x0 - 180 * k || (dx0 + dx1) / 2 > x1 + 180 * k) return false; // relaxed
     }
     const pts = main.map((p) => [p.x, p.y]);
     if (pts[0][1] > pts[pts.length - 1][1]) pts.reverse();
     const start = pts[0], end = pts[pts.length - 1];
-    if (start[1] > y0 + h * 0.40 || end[1] < y0 + h * 0.55) return false;
+    if (start[1] > y0 + h * 0.65 || end[1] < y0 + h * 0.30) return false; // relaxed
     let topMinX = Infinity, topMaxX = -Infinity, topMaxXy = 0;
     for (const [x, y] of pts) {
-      if (y <= y0 + h * 0.45) {
+      if (y <= y0 + h * 0.55) { // relaxed from 0.50
         if (x > topMaxX) { topMaxX = x; topMaxXy = y; }
         topMinX = Math.min(topMinX, x);
       }
     }
-    if (topMaxX === -Infinity || topMaxX - topMinX < w * 0.55) return false;
-    if (topMaxXy < y0 + h * 0.08) return false;
-    let botMinX = Infinity, botMaxX = -Infinity;
-    for (const [x, y] of pts) {
-      if (y >= y0 + h * 0.66) {
-        botMinX = Math.min(botMinX, x);
-        botMaxX = Math.max(botMaxX, x);
-      }
-    }
-    if (botMaxX !== -Infinity && botMaxX - botMinX > w * 0.60) return false;
+    if (topMaxX === -Infinity || topMaxX - topMinX < w * 0.25) return false; // relaxed from 0.35
+    if (topMaxXy < y0 + h * 0.02) return false; // relaxed from 0.03
     return true;
   }
 }
 
-/// Draw one full stroke (variable width, quadratic midpoints, anti-aliased).
-/// Shared by the pad, the PNG export, and the conjuring replay.
-/// Uses two-pass rendering: a wider low-alpha halo for smooth edges,
-/// then the crisp main stroke on top — eliminates pixel-stepping.
 export function drawStroke(ctx, pts, color, alpha = 0.96, widthScale = 1) {
   if (!pts.length) return;
   ctx.save();
@@ -505,74 +377,23 @@ export function drawStroke(ctx, pts, color, alpha = 0.96, widthScale = 1) {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   if (pts.length === 1) {
-    // Soft halo + solid core for single dot
-    ctx.beginPath();
-    ctx.arc(pts[0].x, pts[0].y, (pts[0].w / 2) * widthScale * 1.35, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = alpha * 0.20;
-    ctx.fill();
     ctx.beginPath();
     ctx.arc(pts[0].x, pts[0].y, (pts[0].w / 2) * widthScale, 0, Math.PI * 2);
-    ctx.globalAlpha = alpha;
     ctx.fill();
     ctx.restore();
     return;
   }
-  // Build path segments
-  const segments = [];
-  segments.push({
-    x1: pts[0].x, y1: pts[0].y,
-    x2: (pts[0].x + pts[1].x) / 2, y2: (pts[0].y + pts[1].y) / 2,
-    w: ((pts[0].w + pts[1].w) / 2) * widthScale,
-  });
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  ctx.lineTo((pts[0].x + pts[1].x) / 2, (pts[0].y + pts[1].y) / 2);
+  ctx.lineWidth = ((pts[0].w + pts[1].w) / 2) * widthScale;
+  ctx.stroke();
   for (let i = 1; i < pts.length - 1; i++) {
     const a = pts[i - 1], b = pts[i], c = pts[i + 1];
-    segments.push({
-      x1: (a.x + b.x) / 2, y1: (a.y + b.y) / 2,
-      x2: (b.x + c.x) / 2, y2: (b.y + c.y) / 2,
-      w: b.w * widthScale,
-      cx: b.x, cy: b.y,
-    });
-  }
-  // Pass 1: wide soft glow → eliminates all jagged edges
-  ctx.globalAlpha = alpha * 0.08;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  for (const s of segments) {
     ctx.beginPath();
-    ctx.moveTo(s.x1, s.y1);
-    if (s.cx !== undefined) {
-      ctx.quadraticCurveTo(s.cx, s.cy, s.x2, s.y2);
-    } else {
-      ctx.lineTo(s.x2, s.y2);
-    }
-    ctx.lineWidth = s.w * 1.9;
-    ctx.stroke();
-  }
-  // Pass 2: medium halo → smooth anti-aliased transition
-  ctx.globalAlpha = alpha * 0.18;
-  for (const s of segments) {
-    ctx.beginPath();
-    ctx.moveTo(s.x1, s.y1);
-    if (s.cx !== undefined) {
-      ctx.quadraticCurveTo(s.cx, s.cy, s.x2, s.y2);
-    } else {
-      ctx.lineTo(s.x2, s.y2);
-    }
-    ctx.lineWidth = s.w * 1.45;
-    ctx.stroke();
-  }
-  // Pass 3: main crisp stroke
-  ctx.globalAlpha = alpha;
-  for (const s of segments) {
-    ctx.beginPath();
-    ctx.moveTo(s.x1, s.y1);
-    if (s.cx !== undefined) {
-      ctx.quadraticCurveTo(s.cx, s.cy, s.x2, s.y2);
-    } else {
-      ctx.lineTo(s.x2, s.y2);
-    }
-    ctx.lineWidth = s.w;
+    ctx.moveTo((a.x + b.x) / 2, (a.y + b.y) / 2);
+    ctx.quadraticCurveTo(b.x, b.y, (b.x + c.x) / 2, (b.y + c.y) / 2);
+    ctx.lineWidth = b.w * widthScale;
     ctx.stroke();
   }
   ctx.restore();
