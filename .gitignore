@@ -1,5 +1,6 @@
 node_modules/
 .wrangler/
-.wrangler-tmp/
-*.log
+.dev.vars
+dist/
 .DS_Store
+*.log
