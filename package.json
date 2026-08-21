@@ -1,15 +1,13 @@
 {
-  "name": "riddle-web",
-  "version": "3.9.0",
-  "description": "Tom Riddle's diary for the web — faithful port of MaximeRivest/Riddle",
+  "name": "tom-riddles-diary",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tom Riddle's Diary — write on the page with your finger or pen, and the diary answers in a flowing hand. A Cloudflare Workers web port of MaximeRivest/riddle.",
   "scripts": {
-    "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "build": "node build-worker.js"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
-    "typescript": "^5.4.5",
-    "@cloudflare/workers-types": "^0.20240712.0",
-    "esbuild": "^0.25.0"
+    "wrangler": "^4.123.0"
   }
 }
