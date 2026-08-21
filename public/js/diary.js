@@ -20,9 +20,16 @@ const pageIcon = $("page-icon");
 const btnMusic = $("btn-music");
 const btnReset = $("btn-reset");
 const btnFade = $("btn-fade");
+const btnGuideClose = $("btn-guide-close");
 const bgMusic = $("bg-music");
 const footerContent = $("footer-content");
 const musicFileInput = $("music-file-input");
+
+// Guide close button (top-right ╳)
+btnGuideClose.addEventListener("click", (e) => {
+  e.stopPropagation();
+  hideGuide();
+});
 
 // ------------------------------------------------------------------ state
 

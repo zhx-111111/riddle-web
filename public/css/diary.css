@@ -412,6 +412,29 @@ body.fs .fs-only { display: flex !important; }
   transform: translate(-50%, -50%);
   width: min(86%, 520px);
   max-height: 84%;
+
+/* Guide close button (top-right of the glass card) */
+.guide-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--ui-color, #f4ede0);
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.25s ease, transform 0.2s ease;
+  z-index: 2;
+}
+.guide-close:hover  { background: rgba(255, 255, 255, 0.28); }
+.guide-close:active { transform: scale(0.92); }
   overflow: auto;
   padding: 34px 38px;
   border-radius: 22px;
