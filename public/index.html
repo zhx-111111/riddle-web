@@ -3,35 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#7c5cbf">
+<meta name="theme-color" content="#d8e2f8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Tom's Diary">
-<!-- Apple Touch Icon: blue-purple gradient rounded square with open book + quill -->
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23667eea'/%3E%3Cstop offset='40%25' stop-color='%237c5cbf'/%3E%3Cstop offset='70%25' stop-color='%238b5cf6'/%3E%3Cstop offset='100%25' stop-color='%236c63ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='512' height='512' rx='112' fill='url(%23g)'/%3E%3Cg fill='none' stroke='white' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M128 376V140c0-30 24-54 54-54h100c30 0 54 24 54 54v236'/%3E%3Cpath d='M384 376V140c0-30-24-54-54-54h-100c-30 0-54 24-54 54v236'/%3E%3Cpath d='M256 86v60'/%3E%3C/g%3E%3Cg transform='translate(346 96) rotate(18)' fill='none' stroke='white' stroke-width='14' stroke-linecap='round'%3E%3Cpath d='M0 0c36-12 68 4 88 28-12-36 8-68-4-88'/%3E%3Cpath d='M8 32c20-4 40 8 50 24'/%3E%3Cpath d='M14 50c16-2 32 6 40 18'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23667eea'/%3E%3Cstop offset='50%25' stop-color='%237c5cbf'/%3E%3Cstop offset='100%25' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='512' height='512' rx='112' fill='url(%23g)'/%3E%3Cg fill='none' stroke='white' stroke-width='22' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M128 376V140c0-30 24-54 54-54h100c30 0 54 24 54 54v236'/%3E%3Cpath d='M384 376V140c0-30-24-54-54-54h-100c-30 0-54 24-54 54v236'/%3E%3Cpath d='M256 86v60'/%3E%3C/g%3E%3Cg transform='translate(346 96) rotate(18)' fill='none' stroke='white' stroke-width='14' stroke-linecap='round'%3E%3Cpath d='M0 0c36-12 68 4 88 28-12-36 8-68-4-88'/%3E%3Cpath d='M8 32c20-4 40 8 50 24'/%3E%3Cpath d='M14 50c16-2 32 6 40 18'/%3E%3C/g%3E%3C/svg%3E">
-<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Tom%20Riddle's%20Diary%22%2C%22short_name%22%3A%22Tom's%20Diary%22%2C%22description%22%3A%22Write%20with%20your%20quill%2C%20Tom%20replies%20in%20ink%22%2C%22start_url%22%3A%22%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%237c5cbf%22%2C%22theme_color%22%3A%22%237c5cbf%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D'http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg'%2520viewBox%253D'0%25200%2520512%2520512'%253E%253Cdefs%253E%253ClinearGradient%2520id%253D'g'%2520x1%253D'0%2525'%2520y1%253D'0%2525'%2520x2%253D'100%2525'%2520y2%253D'100%2525'%253E%253Cstop%2520offset%253D'0%2525'%2520stop-color%253D'%2523667eea'%252F%253E%253Cstop%2520offset%253D'40%2525'%2520stop-color%253D'%25237c5cbf'%252F%253E%253Cstop%2520offset%253D'70%2525'%2520stop-color%253D'%25238b5cf6'%252F%253E%253Cstop%2520offset%253D'100%2525'%2520stop-color%253D'%25236c63ff'%252F%253E%253C%252FlinearGradient%253E%253C%252Fdefs%253E%253Crect%2520width%253D'512'%2520height%253D'512'%2520rx%253D'112'%2520fill%253D'url(%2523g)'%252F%253E%253Cg%2520fill%253D'none'%2520stroke%253D'white'%2520stroke-width%253D'22'%2520stroke-linecap%253D'round'%2520stroke-linejoin%253D'round'%253E%253Cpath%2520d%253D'M128%2520376V140c0-30%252024-54%252054-54h100c30%25200%252054%252024%252054%252054v236'%252F%253E%253Cpath%2520d%253D'M384%2520376V140c0-30-24-54-54-54h-100c-30%25200-54%252024-54%252054v236'%252F%253E%253Cpath%2520d%253D'M256%252086v60'%252F%253E%253C%252Fg%253E%253Cg%2520transform%253D'translate(346%252096)%2520rotate(18)'%2520fill%253D'none'%2520stroke%253D'white'%2520stroke-width%253D'14'%2520stroke-linecap%253D'round'%253E%253Cpath%2520d%253D'M0%25200c36-12%252068%25204%252088%252028-12-36%25208-68-4-88'%252F%253E%253Cpath%2520d%253D'M8%252032c20-4%252040%25208%252050%252024'%252F%253E%253Cpath%2520d%253D'M14%252050c16-2%252032%25206%252040%252018'%252F%253E%253C%252Fg%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%2C%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D'http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg'%2520viewBox%253D'0%25200%2520512%2520512'%253E%253Cdefs%253E%253ClinearGradient%2520id%253D'g'%2520x1%253D'0%2525'%2520y1%253D'0%2525'%2520x2%253D'100%2525'%2520y2%253D'100%2525'%253E%253Cstop%2520offset%253D'0%2525'%2520stop-color%253D'%2523667eea'%252F%253E%253Cstop%2520offset%253D'50%2525'%2520stop-color%253D'%25237c5cbf'%252F%253E%253Cstop%2520offset%253D'100%2525'%2520stop-color%253D'%25238b5cf6'%252F%253E%253C%252FlinearGradient%253E%253C%252Fdefs%253E%253Crect%2520width%253D'512'%2520height%253D'512'%2520rx%253D'112'%2520fill%253D'url(%2523g)'%252F%253E%253Cg%2520fill%253D'none'%2520stroke%253D'white'%2520stroke-width%253D'22'%2520stroke-linecap%253D'round'%2520stroke-linejoin%253D'round'%253E%253Cpath%2520d%253D'M128%2520376V140c0-30%252024-54%252054-54h100c30%25200%252054%252024%252054%252054v236'%252F%253E%253Cpath%2520d%253D'M384%2520376V140c0-30-24-54-54-54h-100c-30%25200-54%252024-54%252054v236'%252F%253E%253Cpath%2520d%253D'M256%252086v60'%252F%253E%253C%252Fg%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+<meta name="apple-mobile-web-app-title" content="Riddle's Diary">
 <title>Tom Riddle's Diary</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23c8a96a' d='M20.7 3.3c-1.6-1.6-4.2-1.2-6.3.4-2.3 1.8-4.2 4.4-5.6 7.1l-4.2 8 1.4 1.4 8-4.2c2.7-1.4 5.3-3.3 7.1-5.6 1.6-2.1 2-4.7.4-6.3l-.8-.8zm-1.4 1.4.6.6c.9.9.6 2.5-.6 4.1-1.6 2.1-4 3.9-6.5 5.2l-5.9 3.1 3.1-5.9c1.3-2.5 3.1-4.9 5.2-6.5 1.6-1.2 3.2-1.5 4.1-.6z'/%3E%3C/svg%3E">
 <link rel="preload" href="/fonts/DancingScript.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="/css/diary.css">
 </head>
 <body>
-<!-- App icon (top center): blue-purple gradient rounded square, white-bordered open book + quill -->
-<div id="app-icon" title="Tom Riddle's Diary" aria-label="Tom Riddle's Diary">
-  <svg viewBox="0 0 64 64" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Open book with white border -->
-    <path d="M10 50V20c0-3.5 2.8-6.2 6.2-6.2h11.6C31 13.8 33.8 16.5 33.8 20v30"/>
-    <path d="M54 50V20c0-3.5-2.8-6.2-6.2-6.2H36.2C33 13.8 30.2 16.5 30.2 20v30"/>
-    <path d="M32 14v36"/>
-    <!-- Quill feather on top-right -->
-    <g transform="translate(43 10) rotate(20)">
-      <path d="M0 0c10-4 20 2 26 10-4-12 2-22-2-26"/>
-      <path d="M3 10c6-1 12 3 16 8"/>
-      <path d="M6 18c5 0 10 3 13 8"/>
-      <line x1="0" y1="0" x2="18" y2="18" stroke-width="2"/>
-    </g>
-  </svg>
+
+<!-- Page-level header: app icon + title (top-left, topmost layer, hidden in fullscreen) -->
+<div id="page-header">
+  <div id="page-icon">
+    <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="trdIconG" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#5b7cfa"/>
+          <stop offset="1" stop-color="#a05bf0"/>
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="116" height="116" rx="27" fill="url(#trdIconG)"/>
+      <g fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M52 48 C 62 39, 74 27, 86 14"/>
+        <path d="M86 14 C 73 16, 61 26, 55 41"/>
+        <path d="M86 14 C 84 27, 74 39, 59 45"/>
+        <path d="M60 62 C 51 55, 37 53, 27 56 L 27 88 C 37 85, 51 87, 60 94 C 69 87, 83 85, 93 88 L 93 56 C 83 53, 69 55, 60 62 Z"/>
+        <path d="M60 62 L 60 94"/>
+        <path d="M35 64 C 43 62, 51 63, 56 67" stroke-width="3" opacity="0.85"/>
+        <path d="M85 64 C 77 62, 69 63, 64 67" stroke-width="3" opacity="0.85"/>
+      </g>
+    </svg>
+  </div>
+  <span id="page-title">Tom Riddle's Daily</span>
 </div>
+
+<!-- Music floating button (hidden in fullscreen) -->
+<button id="btn-music" class="float-btn" title="Play / Pause Music" aria-label="Play or Pause Music">
+  <svg class="ic-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+  <svg class="ic-pause hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+</button>
 
 <div id="stage">
   <div id="desk">
@@ -41,7 +55,7 @@
 
       <div id="whisper" aria-live="polite"></div>
 
-      <!-- theme + eraser: top-left -->
+      <!-- theme + eraser: top-left of paper -->
       <div id="ctl-left" class="ctl">
         <div id="swatches"></div>
         <button id="btn-eraser" class="btn-glass icon-btn" title="Eraser" aria-label="Eraser">
@@ -52,9 +66,9 @@
         </button>
       </div>
 
-      <!-- landscape + fullscreen: top-right -->
+      <!-- fullscreen: top-right of paper (landscape only in fullscreen) -->
       <div id="ctl-right" class="ctl">
-        <button id="btn-landscape" class="btn-glass icon-btn" title="Landscape" aria-label="Landscape">
+        <button id="btn-landscape" class="btn-glass icon-btn fs-only" title="Landscape" aria-label="Landscape">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="6.5" width="18" height="11" rx="2.2"/>
             <path d="M12 3.5v-1M8.5 4.2 7.8 3M15.5 4.2l.7-1.2"/>
@@ -70,18 +84,48 @@
         </button>
       </div>
 
-      <!-- the guide -->
+      <!-- Reset button: bottom-right of paper -->
+      <button id="btn-reset" class="btn-glass icon-btn reset-btn hidden" title="Reset" aria-label="Reset current turn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+      </button>
+
+      <!-- Fade button: bottom-right, next to reset, drops all UI to 15% opacity -->
+      <button id="btn-fade" class="btn-glass icon-btn fade-btn hidden" title="Fade UI to 15%" aria-label="Fade UI" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a6 6 0 0 0-6 6v3l-2 3h16l-2-3V9a6 6 0 0 0-6-6z"/>
+          <path d="M10 17a2 2 0 0 0 4 0"/>
+          <path d="M12 3v3" stroke-dasharray="2 3"/>
+        </svg>
+      </button>
+
+      <!-- the guide, summoned by drawing a large ? -->
       <div id="guide" class="glass-card hidden">
-        <h2>The Diary</h2>
-        <p>Write, then rest your quill:<br>the diary drinks your ink and Tom replies.</p>
-        <p>The diary remembers. Ask it:<br><em>&ldquo;show me what I wrote about&hellip;&rdquo;</em><br>and the page will rise again.</p>
-        <p>Touch with two fingers to erase,<br>or use the eraser in the corner.</p>
-        <p>A large <b>?</b> summons this guide.</p>
+        <div id="guide-content">
+          <h2>The Diary</h2>
+          <p>Write, then rest your quill:<br>the diary drinks your ink and Tom replies.</p>
+          <p>The diary remembers. Ask it:<br><em>&ldquo;show me what I wrote about&hellip;&rdquo;</em><br>and the page will rise again.</p>
+          <p>Touch with two fingers to erase,<br>or use the eraser in the corner.</p>
+          <p>A large <b>?</b> summons this guide.</p>
+        </div>
         <p class="dim">Touch the page to close.</p>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Footer area (below the paper, editable from admin) -->
+<div id="page-footer">
+  <div id="footer-content" class="footer-sandbox"></div>
+</div>
+
+<audio id="bg-music" loop preload="none"></audio>
+
+<!-- Hidden file input for music upload -->
+<input id="music-file-input" type="file" accept="audio/*" style="display:none;">
+
 <script type="module" src="/js/diary.js"></script>
 </body>
 </html>
